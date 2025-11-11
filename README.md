@@ -210,15 +210,46 @@ REACT_APP_API_URL=http://localhost:5000/api
 
 ## 🧪 Testing
 
-```bash
-# API tests
-cd api
-npm test
+### Build Verification
 
-# Client tests
-cd client
-npm test
+Run the test script to verify both API and Client build successfully:
+
+```bash
+./test.sh
 ```
+
+### Database Seeding
+
+To populate the database with test data:
+
+```bash
+cd api
+npm run seed
+```
+
+This creates:
+- 3 test users (agent, consultant, admin) with password: `password123`
+- 3 clients
+- 3 licenses (expiring in 15, 10, and 6 days)
+- 3 contracts (expiring in 15, 10, and 6 days)
+
+### Test Credentials
+
+After seeding:
+- **Agent**: agent@advancia.com / password123
+- **Consultant**: consultant@advancia.com / password123
+- **Admin**: admin@advancia.com / password123
+
+### Manual Expiry Check
+
+To manually test the expiry checker (without waiting for the cron schedule):
+
+```bash
+cd api
+npm run test:expiry
+```
+
+This will check all licenses and contracts and log which notifications would be sent.
 
 ## 🔐 Security
 
@@ -227,6 +258,10 @@ npm test
 - Role-based access control
 - Protected API endpoints
 - CORS configuration
+- Rate limiting:
+  - Authentication endpoints: 5 requests per 15 minutes
+  - Write operations: 30 requests per 15 minutes
+  - General API: 100 requests per 15 minutes
 
 ## 📖 Documentation
 
