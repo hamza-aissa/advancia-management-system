@@ -3,6 +3,7 @@ import cors from 'cors';
 import { connectDB } from './config/database';
 import { config } from './config';
 import { expiryCheckerJob } from './jobs/expiryChecker';
+import { apiLimiter } from './middleware/rateLimiter';
 import authRoutes from './routes/auth';
 import clientRoutes from './routes/clients';
 import licenseRoutes from './routes/licenses';
@@ -14,6 +15,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Apply rate limiting to all API routes
+app.use('/api/', apiLimiter);
 
 // Routes
 app.use('/api/auth', authRoutes);
