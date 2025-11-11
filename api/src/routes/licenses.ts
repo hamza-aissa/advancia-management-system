@@ -1,0 +1,24 @@
+import { Router } from 'express';
+import {
+  createLicense,
+  getLicenses,
+  getLicense,
+  updateLicense,
+  deleteLicense
+} from '../controllers/licenseController';
+import { authenticate, authorize } from '../middleware/auth';
+import { UserRole } from '../types';
+
+const router = Router();
+
+// All routes require authentication
+router.use(authenticate);
+
+// Agents and admins can manage licenses
+router.post('/', authorize(UserRole.AGENT, UserRole.ADMIN), createLicense);
+router.get('/', authorize(UserRole.AGENT, UserRole.ADMIN), getLicenses);
+router.get('/:id', authorize(UserRole.AGENT, UserRole.ADMIN), getLicense);
+router.put('/:id', authorize(UserRole.AGENT, UserRole.ADMIN), updateLicense);
+router.delete('/:id', authorize(UserRole.ADMIN), deleteLicense);
+
+export default router;
