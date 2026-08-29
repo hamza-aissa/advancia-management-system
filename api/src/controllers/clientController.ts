@@ -1,95 +1,198 @@
 import { Response } from 'express';
-import { Client } from '../models/Client';
+import { FilterQuery } from 'mongoose';
+import { Client, ClientDocument } from '../models/Client';
+import { User } from '../models/User';
 import { AuthRequest } from '../middleware/auth';
+import { ClientStatus, UserRole } from '../types';
+import { sendError } from '../utils/errors';
+import { License } from '../models/License';
+import { Contract } from '../models/Contract';
+
+const assignedUserFields = 'firstName lastName email role';
+
+const withComputedStatus = async (clients: ClientDocument[]): Promise<Record<string, unknown>[]> => {
+  if (clients.length === 0) return [];
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() + 15);
+  const clientIds = clients.map((client) => client._id);
+  const open = { isActive: true, archivedAt: null, renewalStatus: { $nin: ['renewed', 'declined'] } };
+  const riskWindow = { $or: [{ expiryDate: { $lte: cutoff } }, { nextFollowUpAt: { $lt: new Date() } }] };
+  const [licenseClientIds, contractClientIds] = await Promise.all([
+    License.distinct('client', { client: { $in: clientIds }, ...open, ...riskWindow }),
+    Contract.distinct('client', { client: { $in: clientIds }, ...open, ...riskWindow })
+  ]);
+  const atRisk = new Set([...licenseClientIds, ...contractClientIds].map(String));
+  return clients.map((client) => ({
+    ...client.toJSON(),
+    status: client.archivedAt
+      ? ClientStatus.INACTIVE
+      : atRisk.has(String(client._id)) ? ClientStatus.AT_RISK : ClientStatus.ACTIVE
+  }));
+};
+
+export const buildClientScope = (user: NonNullable<AuthRequest['user']>): FilterQuery<ClientDocument> => {
+  if (user.role === UserRole.ADMIN) return {};
+  if (user.role === UserRole.AGENT) return { assignedAgent: user.id };
+  if (user.role === UserRole.CONSULTANT) return { assignedConsultant: user.id };
+  return { _id: { $exists: false } };
+};
+
+const validateAssignments = async (agentId?: string, consultantId?: string): Promise<boolean> => {
+  const [agent, consultant] = await Promise.all([
+    agentId ? User.exists({ _id: agentId, role: UserRole.AGENT }) : true,
+    consultantId ? User.exists({ _id: consultantId, role: UserRole.CONSULTANT }) : true
+  ]);
+  return Boolean(agent && consultant);
+};
 
 export const createClient = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { name, email, phone, address } = req.body;
+    const input = { ...req.body };
+    if (req.user!.role === UserRole.AGENT) input.assignedAgent = req.user!.id;
+    if (req.user!.role === UserRole.CONSULTANT) input.assignedConsultant = req.user!.id;
+    if (req.user!.role === UserRole.ADMIN && (!input.assignedAgent || !input.assignedConsultant)) {
+      sendError(res, 422, 'INVALID_ASSIGNMENT', 'Admin-created clients require both assignments', {
+        assignedAgent: input.assignedAgent ? [] : ['Select an active agent'],
+        assignedConsultant: input.assignedConsultant ? [] : ['Select an active consultant']
+      });
+      return;
+    }
+    if (!(await validateAssignments(input.assignedAgent, input.assignedConsultant))) {
+      sendError(res, 422, 'INVALID_ASSIGNMENT', 'Assigned users must be an agent and a consultant', {
+        assignedAgent: ['Select an active agent'],
+        assignedConsultant: ['Select an active consultant']
+      });
+      return;
+    }
 
-    const client = new Client({
-      name,
-      email,
-      phone,
-      address
-    });
-
-    await client.save();
-
-    res.status(201).json({
-      message: 'Client created successfully',
-      client
-    });
-  } catch (error) {
+    const client = await Client.create(input);
+    await client.populate([
+      { path: 'assignedAgent', select: assignedUserFields },
+      { path: 'assignedConsultant', select: assignedUserFields }
+    ]);
+    const [data] = await withComputedStatus([client]);
+    res.status(201).json({ data });
+  } catch (error: any) {
     console.error('Create client error:', error);
-    res.status(500).json({ error: 'Server error' });
+    if (error?.code === 11000) {
+      sendError(res, 422, 'VALIDATION_ERROR', 'Request validation failed', { email: ['A client with this email already exists'] });
+      return;
+    }
+    sendError(res, 500, 'INTERNAL_ERROR', 'Unable to create client');
   }
 };
 
 export const getClients = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const clients = await Client.find().sort({ name: 1 });
-    res.json({ clients });
+    const filter: FilterQuery<ClientDocument> = { ...buildClientScope(req.user!) };
+    const isAdmin = req.user!.role === UserRole.ADMIN;
+    filter.archivedAt = isAdmin && req.query.archived === 'true' ? { $ne: null } : null;
+    if (req.query.search) {
+      const safeSearch = String(req.query.search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.$or = [
+        { name: { $regex: safeSearch, $options: 'i' } },
+        { email: { $regex: safeSearch, $options: 'i' } }
+      ];
+    }
+
+    const clients = await Client.find(filter)
+      .populate('assignedAgent', assignedUserFields)
+      .populate('assignedConsultant', assignedUserFields)
+      .sort({ status: 1, name: 1 });
+    const decoratedClients = await withComputedStatus(clients);
+    const data = req.query.status
+      ? decoratedClients.filter((client) => client.status === req.query.status)
+      : decoratedClients;
+    res.json({ data: { clients: data } });
   } catch (error) {
     console.error('Get clients error:', error);
-    res.status(500).json({ error: 'Server error' });
+    sendError(res, 500, 'INTERNAL_ERROR', 'Unable to retrieve clients');
   }
 };
 
 export const getClient = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const client = await Client.findById(req.params.id);
+    const client = await Client.findOne({
+      _id: req.params.id,
+      archivedAt: null,
+      ...buildClientScope(req.user!)
+    })
+      .populate('assignedAgent', assignedUserFields)
+      .populate('assignedConsultant', assignedUserFields);
 
     if (!client) {
-      res.status(404).json({ error: 'Client not found' });
+      // Returning 404 avoids disclosing that another employee owns the record.
+      sendError(res, 404, 'CLIENT_NOT_FOUND', 'Client not found');
       return;
     }
-
-    res.json({ client });
+    const [decorated] = await withComputedStatus([client]);
+    const itemBase = { client: client._id, archivedAt: null };
+    const [licenses, contracts] = await Promise.all([
+      req.user!.role === UserRole.CONSULTANT ? Promise.resolve([]) : License.find({ ...itemBase, ...(req.user!.role === UserRole.AGENT ? { assignedBy: req.user!.id } : {}) }).sort({ expiryDate: 1 }),
+      req.user!.role === UserRole.AGENT ? Promise.resolve([]) : Contract.find({ ...itemBase, ...(req.user!.role === UserRole.CONSULTANT ? { managedBy: req.user!.id } : {}) }).sort({ expiryDate: 1 })
+    ]);
+    res.json({ data: { ...decorated, licenses, contracts } });
   } catch (error) {
     console.error('Get client error:', error);
-    res.status(500).json({ error: 'Server error' });
+    sendError(res, 500, 'INTERNAL_ERROR', 'Unable to retrieve client');
   }
 };
 
 export const updateClient = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { name, email, phone, address } = req.body;
+    const isAdmin = req.user!.role === UserRole.ADMIN;
+    const client = await Client.findOne({
+      _id: req.params.id,
+      archivedAt: null,
+      ...buildClientScope(req.user!)
+    });
 
-    const client = await Client.findById(req.params.id);
     if (!client) {
-      res.status(404).json({ error: 'Client not found' });
+      sendError(res, 404, 'CLIENT_NOT_FOUND', 'Client not found');
       return;
     }
 
-    if (name) client.name = name;
-    if (email) client.email = email;
-    if (phone !== undefined) client.phone = phone;
-    if (address !== undefined) client.address = address;
+    if (isAdmin && (req.body.assignedAgent || req.body.assignedConsultant)) {
+      const agentId = req.body.assignedAgent ?? client.assignedAgent?.toString();
+      const consultantId = req.body.assignedConsultant ?? client.assignedConsultant?.toString();
+      if (!agentId || !consultantId || !(await validateAssignments(agentId, consultantId))) {
+        sendError(res, 422, 'INVALID_ASSIGNMENT', 'Assigned users must be an agent and a consultant');
+        return;
+      }
+    }
 
+    Object.assign(client, req.body);
     await client.save();
-
-    res.json({
-      message: 'Client updated successfully',
-      client
-    });
-  } catch (error) {
+    await client.populate([
+      { path: 'assignedAgent', select: assignedUserFields },
+      { path: 'assignedConsultant', select: assignedUserFields }
+    ]);
+    const [data] = await withComputedStatus([client]);
+    res.json({ data });
+  } catch (error: any) {
     console.error('Update client error:', error);
-    res.status(500).json({ error: 'Server error' });
+    if (error?.code === 11000) {
+      sendError(res, 422, 'VALIDATION_ERROR', 'Request validation failed', { email: ['A client with this email already exists'] });
+      return;
+    }
+    sendError(res, 500, 'INTERNAL_ERROR', 'Unable to update client');
   }
 };
 
-export const deleteClient = async (req: AuthRequest, res: Response): Promise<void> => {
+export const archiveClient = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const client = await Client.findByIdAndDelete(req.params.id);
-
+    const client = await Client.findOneAndUpdate(
+      { _id: req.params.id, archivedAt: null },
+      { archivedAt: new Date(), status: ClientStatus.INACTIVE },
+      { new: true }
+    );
     if (!client) {
-      res.status(404).json({ error: 'Client not found' });
+      sendError(res, 404, 'CLIENT_NOT_FOUND', 'Client not found');
       return;
     }
-
-    res.json({ message: 'Client deleted successfully' });
+    res.json({ data: client });
   } catch (error) {
-    console.error('Delete client error:', error);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Archive client error:', error);
+    sendError(res, 500, 'INTERNAL_ERROR', 'Unable to archive client');
   }
 };

@@ -4,182 +4,199 @@ import { User } from '../models/User';
 import { Client } from '../models/Client';
 import { License } from '../models/License';
 import { Contract } from '../models/Contract';
-import { UserRole } from '../types';
+import { RenewalActivity } from '../models/RenewalActivity';
+import { NotificationLog } from '../models/NotificationLog';
+import { ClientStatus, UserRole } from '../types';
 import { config } from '../config';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const today = new Date();
+today.setUTCHours(0, 0, 0, 0);
+const daysFromToday = (days: number) => new Date(today.getTime() + days * DAY_MS);
 
 const seedDatabase = async () => {
   try {
-    console.log('🌱 Seeding database...');
-
-    // Connect to database
+    console.log('🌱 Seeding Advancia demo database...');
     await mongoose.connect(config.mongoUri);
-    console.log('✅ Connected to MongoDB');
 
-    // Clear existing data
-    await User.deleteMany({});
-    await Client.deleteMany({});
-    await License.deleteMany({});
-    await Contract.deleteMany({});
-    console.log('🗑️  Cleared existing data');
+    // Reset dependent collections first so reruns never leave stale demo history.
+    await Promise.all([
+      RenewalActivity.deleteMany({}),
+      NotificationLog.deleteMany({})
+    ]);
+    await Promise.all([License.deleteMany({}), Contract.deleteMany({})]);
+    await Promise.all([Client.deleteMany({}), User.deleteMany({})]);
 
-    // Create users
-    const hashedPassword = await bcrypt.hash('password123', 10);
+    const password = await bcrypt.hash('password123', 10);
+    const [agent, consultant, admin] = await User.create([
+      { email: 'agent@advancia.com', password, firstName: 'Amine', lastName: 'Ben Salem', role: UserRole.AGENT },
+      { email: 'consultant@advancia.com', password, firstName: 'Sarra', lastName: 'Mansouri', role: UserRole.CONSULTANT },
+      { email: 'admin@advancia.com', password, firstName: 'Leila', lastName: 'Trabelsi', role: UserRole.ADMIN }
+    ]);
 
-    const agent = new User({
-      email: 'agent@advancia.com',
-      password: hashedPassword,
-      firstName: 'John',
-      lastName: 'Agent',
-      role: UserRole.AGENT
-    });
+    const [atlas, carthage, medina, olive, nexus, horizon, bluewave, unassigned] = await Client.create([
+      {
+        name: 'Atlas Distribution', email: 'contact@atlas-demo.tn', phone: '+216 71 100 110',
+        address: 'Charguia 1, Tunis', assignedAgent: agent._id, assignedConsultant: consultant._id,
+        status: ClientStatus.AT_RISK, notes: 'Priority renewal account.', lastContactAt: daysFromToday(-4)
+      },
+      {
+        name: 'Carthage Industries', email: 'admin@carthage-demo.tn', phone: '+216 71 200 220',
+        address: 'Ben Arous, Tunis', assignedAgent: agent._id, assignedConsultant: consultant._id,
+        status: ClientStatus.AT_RISK, notes: 'Procurement approval still pending.', lastContactAt: daysFromToday(-8)
+      },
+      {
+        name: 'Medina Retail Group', email: 'operations@medina-demo.tn', phone: '+216 70 300 330',
+        address: 'Lac 1, Tunis', assignedAgent: agent._id, assignedConsultant: consultant._id,
+        status: ClientStatus.ACTIVE, lastContactAt: daysFromToday(-2)
+      },
+      {
+        name: 'Olive Tech Solutions', email: 'hello@olive-demo.tn', phone: '+216 74 400 440',
+        address: 'Sfax', assignedAgent: agent._id, assignedConsultant: consultant._id,
+        status: ClientStatus.ACTIVE, lastContactAt: daysFromToday(-1)
+      },
+      {
+        name: 'Nexus Services', email: 'contact@nexus-demo.tn', phone: '+216 73 500 550',
+        address: 'Sousse', assignedAgent: agent._id, assignedConsultant: consultant._id,
+        status: ClientStatus.INACTIVE, notes: 'Renewal declined after budget review.', lastContactAt: daysFromToday(-12)
+      },
+      {
+        name: 'Horizon Logistics', email: 'office@horizon-demo.tn', phone: '+216 72 600 660',
+        address: 'Bizerte', assignedAgent: agent._id, assignedConsultant: consultant._id,
+        status: ClientStatus.ACTIVE, lastContactAt: daysFromToday(-6)
+      },
+      {
+        name: 'Bluewave Hospitality', email: 'it@bluewave-demo.tn', phone: '+216 75 700 770',
+        address: 'Djerba', assignedAgent: agent._id, assignedConsultant: consultant._id,
+        status: ClientStatus.ACTIVE, lastContactAt: daysFromToday(-3)
+      },
+      {
+        name: 'Northstar Manufacturing', email: 'contact@northstar-demo.tn', phone: '+216 71 800 880',
+        address: 'Mghira, Tunis', status: ClientStatus.AT_RISK,
+        notes: 'New account awaiting assignment by an administrator.'
+      }
+    ]);
 
-    const consultant = new User({
-      email: 'consultant@advancia.com',
-      password: hashedPassword,
-      firstName: 'Jane',
-      lastName: 'Consultant',
-      role: UserRole.CONSULTANT
-    });
+    const licenses = await License.create([
+      {
+        client: atlas._id, name: 'Microsoft 365 Business', description: '45 business user seats',
+        startDate: daysFromToday(-370), expiryDate: daysFromToday(-5), value: 16200, quantity: 45,
+        assignedBy: agent._id, isActive: true, renewalStatus: 'not_contacted'
+      },
+      {
+        client: carthage._id, name: 'Endpoint Security Suite', description: 'Managed endpoint protection',
+        startDate: daysFromToday(-360), expiryDate: daysFromToday(4), value: 9800, quantity: 80,
+        assignedBy: agent._id, isActive: true, renewalStatus: 'waiting',
+        nextFollowUpAt: daysFromToday(-2), lastActionAt: daysFromToday(-8)
+      },
+      {
+        client: medina._id, name: 'Retail POS Licences', description: 'Point-of-sale licences for 12 stores',
+        startDate: daysFromToday(-355), expiryDate: daysFromToday(8), value: 24000, quantity: 36,
+        assignedBy: agent._id, isActive: true, renewalStatus: 'contacted', lastActionAt: daysFromToday(-2)
+      },
+      {
+        client: horizon._id, name: 'Fleet Tracking Platform', description: 'Annual vehicle tracking access',
+        startDate: daysFromToday(-350), expiryDate: daysFromToday(13), value: 18600, quantity: 25,
+        assignedBy: agent._id, isActive: true, renewalStatus: 'not_contacted'
+      },
+      {
+        client: olive._id, name: 'Cloud Development Tools', description: 'Developer toolchain subscription',
+        startDate: daysFromToday(-20), expiryDate: daysFromToday(345), value: 7200, quantity: 12,
+        assignedBy: agent._id, isActive: true, renewalStatus: 'renewed', lastActionAt: daysFromToday(-20),
+        renewalHistory: [{ previousStartDate: daysFromToday(-386), previousExpiryDate: daysFromToday(-21),
+          newStartDate: daysFromToday(-20), newExpiryDate: daysFromToday(345),
+          renewedAt: daysFromToday(-20), renewedBy: agent._id, value: 7200 }]
+      },
+      {
+        client: nexus._id, name: 'Collaboration Platform', description: 'Team workspace subscription',
+        startDate: daysFromToday(-365), expiryDate: daysFromToday(-12), value: 5400, quantity: 20,
+        assignedBy: agent._id, isActive: false, renewalStatus: 'declined', lastActionAt: daysFromToday(-12),
+        declineReason: 'Client consolidated collaboration tools with its parent company.'
+      },
+      {
+        client: unassigned._id, name: 'Manufacturing Design Suite', description: 'Awaiting an agent owner',
+        startDate: daysFromToday(-350), expiryDate: daysFromToday(6), value: 12000, quantity: 8,
+        isActive: true, renewalStatus: 'not_contacted'
+      }
+    ]);
 
-    const admin = new User({
-      email: 'admin@advancia.com',
-      password: hashedPassword,
-      firstName: 'Bob',
-      lastName: 'Admin',
-      role: UserRole.ADMIN
-    });
+    const contracts = await Contract.create([
+      {
+        client: atlas._id, title: 'Infrastructure Support Agreement', description: 'Annual infrastructure support',
+        startDate: daysFromToday(-370), expiryDate: daysFromToday(-3), value: 48000,
+        managedBy: consultant._id, isActive: true, renewalStatus: 'not_contacted'
+      },
+      {
+        client: carthage._id, title: 'ERP Maintenance Contract', description: 'Corrective and preventive ERP maintenance',
+        startDate: daysFromToday(-360), expiryDate: daysFromToday(6), value: 72000,
+        managedBy: consultant._id, isActive: true, renewalStatus: 'contacted', lastActionAt: daysFromToday(-1)
+      },
+      {
+        client: medina._id, title: 'Retail Systems Support', description: 'Support coverage for all retail locations',
+        startDate: daysFromToday(-355), expiryDate: daysFromToday(10), value: 58000,
+        managedBy: consultant._id, isActive: true, renewalStatus: 'waiting',
+        nextFollowUpAt: daysFromToday(2), lastActionAt: daysFromToday(-2)
+      },
+      {
+        client: bluewave._id, title: 'Hospitality Technology Advisory', description: 'Technology advisory retainer',
+        startDate: daysFromToday(-350), expiryDate: daysFromToday(15), value: 36000,
+        managedBy: consultant._id, isActive: true, renewalStatus: 'not_contacted'
+      },
+      {
+        client: olive._id, title: 'Cloud Operations Retainer', description: 'Cloud operations and cost optimisation',
+        startDate: daysFromToday(-30), expiryDate: daysFromToday(335), value: 64000,
+        managedBy: consultant._id, isActive: true, renewalStatus: 'renewed', lastActionAt: daysFromToday(-30),
+        renewalHistory: [{ previousStartDate: daysFromToday(-396), previousExpiryDate: daysFromToday(-31),
+          newStartDate: daysFromToday(-30), newExpiryDate: daysFromToday(335),
+          renewedAt: daysFromToday(-30), renewedBy: consultant._id, value: 64000 }]
+      },
+      {
+        client: nexus._id, title: 'Managed Services Agreement', description: 'Managed operations service',
+        startDate: daysFromToday(-365), expiryDate: daysFromToday(-9), value: 42000,
+        managedBy: consultant._id, isActive: false, renewalStatus: 'declined', lastActionAt: daysFromToday(-9),
+        declineReason: 'The client moved the service in-house.'
+      },
+      {
+        client: unassigned._id, title: 'Factory Systems Support', description: 'Awaiting a consultant owner',
+        startDate: daysFromToday(-350), expiryDate: daysFromToday(10), value: 51000,
+        isActive: true, renewalStatus: 'not_contacted'
+      }
+    ]);
 
-    await agent.save();
-    await consultant.save();
-    await admin.save();
-    console.log('👥 Created users (agent, consultant, admin)');
+    const activities = [
+      { itemType: 'license', itemId: licenses[1]._id, action: 'contacted', performedBy: agent._id,
+        note: 'Renewal options sent to the client.', createdAt: daysFromToday(-8) },
+      { itemType: 'license', itemId: licenses[1]._id, action: 'follow_up_scheduled', performedBy: agent._id,
+        note: 'Follow-up is overdue and needs action.', createdAt: daysFromToday(-8) },
+      { itemType: 'license', itemId: licenses[2]._id, action: 'contacted', performedBy: agent._id,
+        note: 'Client confirmed receipt of the renewal proposal.', createdAt: daysFromToday(-2) },
+      { itemType: 'license', itemId: licenses[4]._id, action: 'renewed', performedBy: agent._id,
+        note: 'Renewed for twelve months.', createdAt: daysFromToday(-20) },
+      { itemType: 'license', itemId: licenses[5]._id, action: 'declined', performedBy: agent._id,
+        note: 'Loss reason recorded after client confirmation.', createdAt: daysFromToday(-12) },
+      { itemType: 'contract', itemId: contracts[1]._id, action: 'contacted', performedBy: consultant._id,
+        note: 'Renewal meeting completed.', createdAt: daysFromToday(-1) },
+      { itemType: 'contract', itemId: contracts[2]._id, action: 'follow_up_scheduled', performedBy: consultant._id,
+        note: 'Decision follow-up scheduled.', createdAt: daysFromToday(-2) },
+      { itemType: 'contract', itemId: contracts[4]._id, action: 'renewed', performedBy: consultant._id,
+        note: 'Renewed for another annual term.', createdAt: daysFromToday(-30) },
+      { itemType: 'contract', itemId: contracts[5]._id, action: 'declined', performedBy: consultant._id,
+        note: 'Loss reason recorded after final follow-up.', createdAt: daysFromToday(-9) }
+    ];
+    await RenewalActivity.insertMany(activities);
 
-    // Create clients
-    const client1 = new Client({
-      name: 'Acme Corporation',
-      email: 'contact@acme.com',
-      phone: '+1-555-0100',
-      address: '123 Business St, New York, NY'
-    });
-
-    const client2 = new Client({
-      name: 'TechStart Inc',
-      email: 'info@techstart.com',
-      phone: '+1-555-0200',
-      address: '456 Innovation Ave, San Francisco, CA'
-    });
-
-    const client3 = new Client({
-      name: 'Global Solutions Ltd',
-      email: 'contact@globalsolutions.com',
-      phone: '+1-555-0300',
-      address: '789 Enterprise Blvd, London, UK'
-    });
-
-    await client1.save();
-    await client2.save();
-    await client3.save();
-    console.log('🏢 Created 3 clients');
-
-    // Create licenses with various expiry dates
-    const today = new Date();
-    
-    // License expiring in 15 days
-    const license1 = new License({
-      client: client1._id,
-      name: 'Enterprise Software License',
-      description: 'Full enterprise suite access',
-      startDate: new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000),
-      expiryDate: new Date(today.getTime() + 15 * 24 * 60 * 60 * 1000),
-      isActive: true,
-      assignedBy: agent._id
-    });
-
-    // License expiring in 10 days
-    const license2 = new License({
-      client: client2._id,
-      name: 'Premium Support License',
-      description: '24/7 premium support access',
-      startDate: new Date(today.getTime() - 180 * 24 * 60 * 60 * 1000),
-      expiryDate: new Date(today.getTime() + 10 * 24 * 60 * 60 * 1000),
-      isActive: true,
-      assignedBy: agent._id
-    });
-
-    // License expiring in 6 days (critical)
-    const license3 = new License({
-      client: client3._id,
-      name: 'Developer Tools License',
-      description: 'Development environment access',
-      startDate: new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000),
-      expiryDate: new Date(today.getTime() + 6 * 24 * 60 * 60 * 1000),
-      isActive: true,
-      assignedBy: agent._id
-    });
-
-    await license1.save();
-    await license2.save();
-    await license3.save();
-    console.log('📜 Created 3 licenses (expiring in 15, 10, and 6 days)');
-
-    // Create contracts with various expiry dates
-    // Contract expiring in 15 days
-    const contract1 = new Contract({
-      client: client1._id,
-      title: 'Annual Maintenance Contract',
-      description: 'System maintenance and updates',
-      startDate: new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000),
-      expiryDate: new Date(today.getTime() + 15 * 24 * 60 * 60 * 1000),
-      value: 50000,
-      isActive: true,
-      managedBy: consultant._id
-    });
-
-    // Contract expiring in 10 days
-    const contract2 = new Contract({
-      client: client2._id,
-      title: 'Consulting Services Agreement',
-      description: 'Strategic consulting services',
-      startDate: new Date(today.getTime() - 180 * 24 * 60 * 60 * 1000),
-      expiryDate: new Date(today.getTime() + 10 * 24 * 60 * 60 * 1000),
-      value: 100000,
-      isActive: true,
-      managedBy: consultant._id
-    });
-
-    // Contract expiring in 6 days (critical)
-    const contract3 = new Contract({
-      client: client3._id,
-      title: 'Support Services Contract',
-      description: 'Dedicated support team',
-      startDate: new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000),
-      expiryDate: new Date(today.getTime() + 6 * 24 * 60 * 60 * 1000),
-      value: 75000,
-      isActive: true,
-      managedBy: consultant._id
-    });
-
-    await contract1.save();
-    await contract2.save();
-    await contract3.save();
-    console.log('📄 Created 3 contracts (expiring in 15, 10, and 6 days)');
-
-    console.log('\n✅ Database seeded successfully!');
-    console.log('\n📝 Test Credentials:');
-    console.log('   Agent:      agent@advancia.com / password123');
-    console.log('   Consultant: consultant@advancia.com / password123');
-    console.log('   Admin:      admin@advancia.com / password123');
-    console.log('\n🔔 Expiry Schedule:');
-    console.log('   - 3 licenses expiring in 15, 10, and 6 days');
-    console.log('   - 3 contracts expiring in 15, 10, and 6 days');
-    console.log('\n💡 Run the expiry checker job to test notifications');
-
-    await mongoose.disconnect();
-    process.exit(0);
+    console.log(`✅ Seeded ${await Client.countDocuments()} clients, ${licenses.length} licences, ${contracts.length} contracts`);
+    console.log('   Coverage: expired, critical, urgent, upcoming, safe, overdue, contacted, waiting, renewed, declined, unassigned client');
+    console.log('\nDemo credentials (password: password123)');
+    console.log('   agent@advancia.com');
+    console.log('   consultant@advancia.com');
+    console.log('   admin@advancia.com');
   } catch (error) {
     console.error('❌ Error seeding database:', error);
-    process.exit(1);
+    process.exitCode = 1;
+  } finally {
+    await mongoose.disconnect();
   }
 };
 
-seedDatabase();
+void seedDatabase();

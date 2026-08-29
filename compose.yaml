@@ -1,0 +1,117 @@
+name: ${COMPOSE_PROJECT_NAME:-advancia-demo}
+
+services:
+  mongo:
+    image: mongo:7.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-advancia}
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - db.adminCommand('ping').ok
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks:
+      - app
+
+  api:
+    build:
+      context: ./api
+      target: runtime
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      MONGO_URI: mongodb://mongo:27017/${MONGO_DATABASE:-advancia}
+      JWT_SECRET: ${JWT_SECRET:-local-demo-only-replace-with-a-long-random-secret-before-hosting}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-7d}
+      CRON_SCHEDULE: ${CRON_SCHEDULE:-0 9 * * *}
+      EMAIL_HOST: ${EMAIL_HOST:-}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_SECURE: ${EMAIL_SECURE:-false}
+      EMAIL_USER: ${EMAIL_USER:-}
+      EMAIL_PASS: ${EMAIL_PASS:-}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@example.invalid}
+      EXECUTIVE_EMAILS: ${EXECUTIVE_EMAILS:-}
+    ports:
+      - "127.0.0.1:${API_PORT:-5000}:5000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --tries=1
+        - --spider
+        - http://127.0.0.1:5000/health
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - app
+
+  web:
+    build:
+      context: ./client
+      target: runtime
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+    restart: unless-stopped
+    environment:
+      API_UPSTREAM: ${API_UPSTREAM:-api:5000}
+      NGINX_ENVSUBST_FILTER: ^API_UPSTREAM$
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --tries=1
+        - --spider
+        - http://127.0.0.1:8080/healthz
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - app
+
+  seed:
+    build:
+      context: ./api
+      target: build
+    profiles:
+      - seed
+    environment:
+      NODE_ENV: development
+      MONGO_URI: mongodb://mongo:27017/${MONGO_DATABASE:-advancia}
+      JWT_SECRET: ${JWT_SECRET:-local-demo-only-replace-with-a-long-random-secret-before-hosting}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-7d}
+    command: ["npm", "run", "seed"]
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - app
+
+volumes:
+  mongo_data:
+
+networks:
+  app:
+    driver: bridge

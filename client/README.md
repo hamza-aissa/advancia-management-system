@@ -1,73 +1,35 @@
-# Advancia Management System - Client
+# Advancia client
 
-Frontend application for the Advancia Management System.
+Vite + React + TypeScript frontend for the Advancia renewal operations demo.
 
-## Features
+## Run locally
 
-- **User Authentication**: Secure login with JWT tokens
-- **Role-Based UI**: Different interfaces for Agents, Consultants, Admins
-- **Responsive Design**: Built with Material-UI for modern, responsive UI
-- **TypeScript**: Full type safety throughout the application
-
-## Tech Stack
-
-- **Framework**: React 18 with TypeScript
-- **UI Library**: Material-UI (MUI)
-- **Routing**: React Router v6
-- **HTTP Client**: Axios
-- **State Management**: React Context API
-
-## Installation
-
-1. Install dependencies:
-```bash
-npm install
-```
-
-2. Create environment file:
 ```bash
 cp .env.example .env
+npm ci
+npm run dev
 ```
 
-3. Configure environment variables in `.env`:
-```
-REACT_APP_API_URL=http://localhost:5000/api
+The API defaults to `http://localhost:5000/api`. Override it with:
+
+```env
+VITE_API_URL=http://localhost:5000/api
 ```
 
-## Usage
+## Quality checks
 
-### Development Mode
 ```bash
-npm start
-```
-
-The application will open at [http://localhost:3000](http://localhost:3000).
-
-### Production Build
-```bash
+npm run typecheck
+npm run lint
 npm run build
 ```
 
-This creates an optimized production build in the `build` folder.
+## Architecture
 
-## User Roles
+- `src/lib/api.ts`: typed Axios client, JWT injection, canonical error handling
+- `src/contexts/auth-context.tsx`: session restore and authentication lifecycle
+- `src/components/ui`: shadcn/ui-compatible primitives
+- `src/components/app-shell.tsx`: responsive, role-aware navigation
+- `src/pages`: login and feature route extension points
 
-### Agent
-- Dashboard showing license management features
-- Can view and manage licenses
-- Receives license expiry notifications
-
-### Consultant
-- Dashboard showing contract management features
-- Can view and manage contracts
-- Receives contract expiry notifications
-
-### Admin
-- Full system overview dashboard
-- Can monitor all licenses and contracts
-- Receives escalated expiry notifications
-- Can manage users and view reports
-
-## License
-
-ISC
+There is no public registration route. Interactive roles are Agent, Consultant, and Admin.

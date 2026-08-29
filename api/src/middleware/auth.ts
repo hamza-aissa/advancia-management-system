@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { UserRole } from '../types';
+import { User } from '../models/User';
+import { sendError } from '../utils/errors';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -11,16 +13,19 @@ export interface AuthRequest extends Request {
   };
 }
 
-export const authenticate = (
+export const authenticate = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
-): void => {
+): Promise<void> => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
+    const authorization = req.header('Authorization');
+    const token = authorization?.startsWith('Bearer ')
+      ? authorization.slice('Bearer '.length).trim()
+      : undefined;
 
     if (!token) {
-      res.status(401).json({ error: 'Authentication required' });
+      sendError(res, 401, 'AUTHENTICATION_REQUIRED', 'Authentication required');
       return;
     }
 
@@ -30,24 +35,28 @@ export const authenticate = (
       role: UserRole;
     };
 
-    req.user = decoded;
+    const user = await User.findById(decoded.id).select('email role');
+    if (!user) {
+      sendError(res, 401, 'INVALID_TOKEN', 'Invalid or expired token');
+      return;
+    }
+
+    req.user = { id: String(user._id), email: user.email, role: user.role };
     next();
   } catch (error) {
-    res.status(401).json({ error: 'Invalid or expired token' });
+    sendError(res, 401, 'INVALID_TOKEN', 'Invalid or expired token');
   }
 };
 
 export const authorize = (...roles: UserRole[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
     if (!req.user) {
-      res.status(401).json({ error: 'Authentication required' });
+      sendError(res, 401, 'AUTHENTICATION_REQUIRED', 'Authentication required');
       return;
     }
 
     if (!roles.includes(req.user.role)) {
-      res.status(403).json({ 
-        error: 'Access forbidden: insufficient permissions' 
-      });
+      sendError(res, 403, 'FORBIDDEN', 'Insufficient permissions');
       return;
     }
 

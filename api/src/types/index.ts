@@ -1,8 +1,13 @@
 export enum UserRole {
   AGENT = 'agent',
   CONSULTANT = 'consultant',
-  ADMIN = 'admin',
-  EXECUTIVE = 'executive'
+  ADMIN = 'admin'
+}
+
+export enum ClientStatus {
+  ACTIVE = 'active',
+  AT_RISK = 'at_risk',
+  INACTIVE = 'inactive'
 }
 
 export interface IUser {
@@ -18,6 +23,12 @@ export interface IClient {
   email: string;
   phone?: string;
   address?: string;
+  assignedAgent?: string;
+  assignedConsultant?: string;
+  status: ClientStatus;
+  notes?: string;
+  lastContactAt?: Date;
+  archivedAt?: Date;
 }
 
 export interface ILicense {
