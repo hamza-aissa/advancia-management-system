@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: advancia-management
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRATION
+        value: 7d
+      - key: SEED_IF_EMPTY
+        value: "true"
+      - key: CRON_SECRET
+        generateValue: true
+      - key: CRON_SCHEDULE
+        value: "0 9 * * *"
+      - key: CRON_TIMEZONE
+        value: Africa/Tunis
+      - key: EMAIL_HOST
+        value: ""
+      - key: EXECUTIVE_EMAILS
+        value: ""

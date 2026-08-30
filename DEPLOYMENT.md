@@ -1,5 +1,33 @@
 # Demo deployment
 
+## Public zero-cost deployment
+
+The repository includes a Render Blueprint (`render.yaml`) and a root
+`Dockerfile` that build and serve the real React client and Express API from one
+public service. Use a MongoDB Atlas Free cluster for persistence.
+
+Required Render variable:
+
+- `MONGO_URI`: the Atlas connection string for the dedicated `advancia` database.
+
+The first boot seeds the demo only when the database has no users. Later
+restarts preserve all changes.
+
+Render free services sleep when idle, so the protected daily reminder trigger
+is also available through `.github/workflows/reminders.yml`. Configure these
+GitHub Actions secrets after deployment:
+
+- `ADVANCIA_CRON_URL`: the public Render origin, without a trailing slash.
+- `ADVANCIA_CRON_SECRET`: the same generated `CRON_SECRET` stored on Render.
+
+The workflow runs at 09:05 Tunisia time and retries while a sleeping service
+wakes. The in-process cron remains enabled for continuously running deployments;
+notification logs prevent duplicate reminders.
+
+SMTP remains optional. When no SMTP variables are configured, reminders run
+fully and are recorded as simulated deliveries instead of sending external
+email.
+
 This setup runs the React frontend, Express API, and MongoDB with one Docker
 Compose project. It is intended for a portfolio demo and local evaluation, not
 as a production security baseline.

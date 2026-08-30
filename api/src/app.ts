@@ -1,5 +1,6 @@
 import cors from 'cors';
 import express from 'express';
+import path from 'node:path';
 import { apiLimiter } from './middleware/rateLimiter';
 import authRoutes from './routes/auth';
 import clientRoutes from './routes/clients';
@@ -30,6 +31,15 @@ export const createApp = () => {
   app.get('/health', (_req, res) => {
     res.json({ data: { status: 'ok', timestamp: new Date().toISOString() } });
   });
+
+  const staticDir = process.env.STATIC_DIR;
+  if (staticDir) {
+    app.use(express.static(staticDir));
+    app.use((req, res, next) => {
+      if (req.method !== 'GET' || req.path.startsWith('/api/')) return next();
+      res.sendFile(path.join(staticDir, 'index.html'));
+    });
+  }
 
   app.use(notFoundHandler);
   app.use(errorHandler);

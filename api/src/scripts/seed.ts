@@ -21,6 +21,11 @@ const seedDatabase = async () => {
     console.log('🌱 Seeding Advancia demo database...');
     await mongoose.connect(config.mongoUri);
 
+    if (process.env.SEED_IF_EMPTY === 'true' && await User.exists({})) {
+      console.log('✅ Existing database detected; demo seed skipped.');
+      return;
+    }
+
     // Reset dependent collections first so reruns never leave stale demo history.
     await Promise.all([
       RenewalActivity.deleteMany({}),

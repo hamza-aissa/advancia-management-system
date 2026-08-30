@@ -1,0 +1,25 @@
+name: Rappels quotidiens
+
+on:
+  schedule:
+    - cron: "5 8 * * *"
+  workflow_dispatch:
+
+jobs:
+  run-reminders:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Déclencher la vérification des échéances
+        env:
+          ADVANCIA_CRON_URL: ${{ secrets.ADVANCIA_CRON_URL }}
+          ADVANCIA_CRON_SECRET: ${{ secrets.ADVANCIA_CRON_SECRET }}
+        run: |
+          test -n "$ADVANCIA_CRON_URL"
+          test -n "$ADVANCIA_CRON_SECRET"
+          curl --fail --show-error --silent \
+            --retry 5 --retry-all-errors --retry-delay 15 \
+            --max-time 180 \
+            -X POST \
+            -H "X-Cron-Secret: $ADVANCIA_CRON_SECRET" \
+            "$ADVANCIA_CRON_URL/api/notifications/run-scheduled"
