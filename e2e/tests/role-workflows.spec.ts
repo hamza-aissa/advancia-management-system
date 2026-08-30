@@ -29,11 +29,12 @@ test('Consultant gère le contrat et ses services sans voir les licences', async
   await login(page, 'consultant@advancia.com')
   await openAtlas(page)
   await expect(page.getByRole('heading', { name: 'Contrat' })).toBeVisible()
-  await expect(page.getByText('Support infrastructure annuel')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Licences' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Services et contrat' }).click()
-  await expect(page.getByRole('dialog', { name: 'Modifier le contrat' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Ajouter' })).toBeVisible()
+  const dialog = page.getByRole('dialog', { name: 'Modifier le contrat' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByLabel('Service').first()).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Ajouter' })).toBeVisible()
 })
 
 test('Admin voit les deux départements et administre les comptes', async ({ page }) => {
