@@ -20,7 +20,7 @@ const statusLabels: Record<RenewalStatus, string> = {
 }
 
 const dateFormatter = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
-const moneyFormatter = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
+const moneyFormatter = new Intl.NumberFormat('fr-TN', { style: 'currency', currency: 'TND', minimumFractionDigits: 3, maximumFractionDigits: 3 })
 
 export function UrgencyBadge({ urgency }: { urgency: Urgency }) {
   return <span className={cn('inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold', urgencyClasses[urgency])}>{urgencyLabels[urgency]}</span>

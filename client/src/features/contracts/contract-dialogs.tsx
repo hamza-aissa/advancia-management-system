@@ -1,48 +1,57 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
+import { useEffect, useMemo } from 'react'
+import { useFieldArray, useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
+import { Plus, Trash2 } from 'lucide-react'
 import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { FieldError, fieldClass, textareaClass } from './contract-ui'
+import type { ContractType } from '@/features/catalogs'
 import type { ClientRef, Contract, PersonRef } from './types'
 import { entityId, personName } from './types'
 
 const optionalMoney = z.number().min(0).optional()
 const moneyRegistration = { setValueAs: (value: string) => value === '' ? undefined : Number(value) }
+const serviceSchema = z.object({
+  name: z.string().trim().min(2, 'Saisissez le nom du service'),
+  description: z.string().trim().optional(),
+  quantity: z.number().positive('La quantité doit être supérieure à zéro'),
+  unitPrice: z.number().min(0, 'Le prix doit être positif'),
+})
 const contractSchema = z.object({
   client: z.string().min(1, 'Sélectionnez un client'),
-  title: z.string().trim().min(2, 'Saisissez un titre de contrat'),
+  contractType: z.string().min(1, 'Sélectionnez un type de contrat'),
   description: z.string().trim().optional(),
   startDate: z.string().min(1, 'Sélectionnez une date de début'),
   expiryDate: z.string().min(1, 'Sélectionnez une date d’échéance'),
-  value: optionalMoney,
-  owner: z.string().optional(),
+  services: z.array(serviceSchema).min(1, 'Ajoutez au moins un service'),
 }).refine((data) => !data.startDate || !data.expiryDate || data.expiryDate > data.startDate, { message: 'L’échéance doit être postérieure à la date de début', path: ['expiryDate'] })
 export type ContractFormValues = z.infer<typeof contractSchema>
 
 interface BaseDialogProps { open: boolean; onOpenChange: (open: boolean) => void; busy?: boolean; error?: string }
 
-export function ContractFormDialog({ open, onOpenChange, busy, error, contract, clients, consultants, isAdmin, onSubmit }: BaseDialogProps & {
-  contract?: Contract; clients: ClientRef[]; consultants: PersonRef[]; isAdmin: boolean; onSubmit: (values: ContractFormValues) => Promise<void>
+export function ContractFormDialog({ open, onOpenChange, busy, error, contract, initialClient = '', clients, contractTypes, onSubmit }: BaseDialogProps & {
+  contract?: Contract; initialClient?: string; clients: ClientRef[]; contractTypes: ContractType[]; onSubmit: (values: ContractFormValues) => Promise<void>
 }) {
-  const clientId = !contract ? '' : typeof contract.client === 'string' ? contract.client : entityId(contract.client)
-  const ownerId = !contract ? '' : typeof contract.owner === 'string' ? contract.owner : entityId(contract.owner)
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<ContractFormValues>({ resolver: zodResolver(contractSchema), defaultValues: {
-    client: clientId, title: contract?.title || '', description: contract?.description || '', startDate: contract?.startDate?.slice(0, 10) || '',
-    expiryDate: contract?.expiryDate?.slice(0, 10) || '', value: contract?.value, owner: ownerId,
-  } })
-  useEffect(() => { if (open) reset({ client: clientId, title: contract?.title || '', description: contract?.description || '', startDate: contract?.startDate?.slice(0, 10) || '', expiryDate: contract?.expiryDate?.slice(0, 10) || '', value: contract?.value, owner: ownerId }) }, [open, contract, clientId, ownerId, reset])
+  const clientId = !contract ? initialClient : typeof contract.client === 'string' ? contract.client : entityId(contract.client)
+  const contractTypeId = !contract?.contractType ? '' : typeof contract.contractType === 'string' ? contract.contractType : entityId(contract.contractType)
+  const defaults = useMemo<ContractFormValues>(() => ({ client: clientId, contractType: contractTypeId, description: contract?.description || '', startDate: contract?.startDate?.slice(0, 10) || '', expiryDate: contract?.expiryDate?.slice(0, 10) || '', services: contract?.services?.length ? contract.services : [{ name: '', description: '', quantity: 1, unitPrice: 0 }] }), [clientId, contract, contractTypeId])
+  const { register, control, handleSubmit, reset, formState: { errors } } = useForm<ContractFormValues>({ resolver: zodResolver(contractSchema), defaultValues: defaults })
+  const { fields, append, remove } = useFieldArray({ control, name: 'services' })
+  useEffect(() => { if (open) reset(defaults) }, [defaults, open, reset])
+  const total = (useWatch({ control, name: 'services' }) || []).reduce((sum, service) => sum + (Number(service.quantity) || 0) * (Number(service.unitPrice) || 0), 0)
   return <Dialog open={open} onOpenChange={onOpenChange} title={contract ? 'Modifier le contrat' : 'Nouveau contrat'} description="Renseignez l’accord commercial et son responsable.">
     <form className="space-y-4 p-6" onSubmit={handleSubmit(onSubmit)}>
       {error && <p role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       <div><Label htmlFor="contract-client">Client</Label><select id="contract-client" className={fieldClass} disabled={Boolean(contract)} {...register('client')}><option value="">Sélectionner un client</option>{clients.map((client) => <option key={entityId(client)} value={entityId(client)}>{client.name}</option>)}</select><FieldError>{errors.client?.message}</FieldError></div>
-      <div><Label htmlFor="contract-title">Intitulé du contrat</Label><input id="contract-title" className={fieldClass} {...register('title')} /><FieldError>{errors.title?.message}</FieldError></div>
+      <div><Label htmlFor="contract-type">Type de contrat</Label><select id="contract-type" className={fieldClass} disabled={Boolean(contract)} {...register('contractType')}><option value="">Sélectionner un type</option>{contractTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</select><FieldError>{errors.contractType?.message}</FieldError></div>
       <div><Label htmlFor="contract-description">Description</Label><textarea id="contract-description" className={textareaClass} {...register('description')} /></div>
       <div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="contract-start">Date de début</Label><input id="contract-start" type="date" className={fieldClass} disabled={Boolean(contract)} {...register('startDate')} /><FieldError>{errors.startDate?.message}</FieldError></div><div><Label htmlFor="contract-expiry">Date d’échéance</Label><input id="contract-expiry" type="date" className={fieldClass} disabled={Boolean(contract)} {...register('expiryDate')} /><FieldError>{errors.expiryDate?.message}</FieldError></div></div>
-      <div><Label htmlFor="contract-value">Valeur du contrat</Label><input id="contract-value" type="number" min="0" step="0.01" className={fieldClass} {...register('value', moneyRegistration)} /><FieldError>{errors.value?.message}</FieldError></div>
-      {isAdmin && !contract && <div><Label htmlFor="contract-owner">Consultant responsable</Label><select id="contract-owner" className={fieldClass} {...register('owner')}><option value="">Sélectionner un consultant</option>{consultants.map((person) => <option key={entityId(person)} value={entityId(person)}>{personName(person)}</option>)}</select><FieldError>{errors.owner?.message}</FieldError></div>}
+      <section className="space-y-3 rounded-md border p-3"><div className="flex items-center justify-between"><div><h3 className="text-sm font-semibold">Services inclus</h3><p className="text-xs text-muted-foreground">Le montant du contrat est calculé automatiquement.</p></div><Button type="button" size="sm" variant="outline" onClick={() => append({ name: '', description: '', quantity: 1, unitPrice: 0 })}><Plus />Ajouter</Button></div>
+        {fields.map((field, index) => <div key={field.id} className="grid gap-3 border-t pt-3 sm:grid-cols-[minmax(0,1fr)_100px_140px_auto]"><div><Label htmlFor={`service-${index}-name`}>Service</Label><input id={`service-${index}-name`} className={fieldClass} {...register(`services.${index}.name`)} /><FieldError>{errors.services?.[index]?.name?.message}</FieldError></div><div><Label htmlFor={`service-${index}-quantity`}>Quantité</Label><input id={`service-${index}-quantity`} type="number" min="1" className={fieldClass} {...register(`services.${index}.quantity`, { valueAsNumber: true })} /><FieldError>{errors.services?.[index]?.quantity?.message}</FieldError></div><div><Label htmlFor={`service-${index}-price`}>Prix unitaire (TND)</Label><input id={`service-${index}-price`} type="number" min="0" step="0.01" className={fieldClass} {...register(`services.${index}.unitPrice`, { valueAsNumber: true })} /><FieldError>{errors.services?.[index]?.unitPrice?.message}</FieldError></div><Button type="button" size="icon" variant="ghost" className="self-end" disabled={fields.length === 1} onClick={() => remove(index)} aria-label="Supprimer le service"><Trash2 /></Button><div className="sm:col-span-4"><Label htmlFor={`service-${index}-description`}>Description <span className="font-normal text-muted-foreground">(facultatif)</span></Label><input id={`service-${index}-description`} className={fieldClass} {...register(`services.${index}.description`)} /></div></div>)}
+        {typeof errors.services?.message === 'string' && <FieldError>{errors.services.message}</FieldError>}<div className="flex justify-end border-t pt-3 text-sm"><span className="text-muted-foreground">Total&nbsp;:</span><strong className="ml-2 font-mono">{total.toLocaleString('fr-TN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} TND</strong></div>
+      </section>
       <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Annuler</Button><Button disabled={busy}>{busy ? 'Enregistrement…' : 'Enregistrer'}</Button></div>
     </form>
   </Dialog>

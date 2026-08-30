@@ -1,6 +1,6 @@
-# Advancia Management System
+# Advancia — suivi interne des renouvellements
 
-A comprehensive Clients, Licenses, and Contracts Management System with automated expiry notifications and role-based access control.
+Application interne en français pour éviter la perte de clients liée aux échéances de licences et de contrats.
 
 ## 📋 Overview
 
@@ -8,13 +8,14 @@ This system helps companies manage their clients, licenses, and contracts with a
 
 ### Key Features
 
-- ✅ **Client Management**: Centralized database of all clients
-- 📜 **License Management**: Agent-controlled license assignment and tracking
-- 📄 **Contract Management**: Consultant-managed contract lifecycle
-- 🔔 **Automated Notifications**: Daily cron job checking for upcoming expirations
-- 👥 **Role-Based Access**: Four distinct user roles with specific permissions
-- 📧 **Email Alerts**: Escalating notification system (15, 10, 6 days before expiry)
-- 🔒 **Secure Authentication**: JWT-based authentication system
+- **Annuaire client partagé** entre Agents et Consultants
+- **Licences** gérées uniquement par les Agents à partir d'offres définies par l'Admin
+- **Contrats** gérés uniquement par les Consultants à partir de types définis par l'Admin
+- **Services chiffrés** ajoutés par le Consultant; total calculé automatiquement
+- **Un seul contrat par client**, renouvelé dans le même dossier avec historique
+- **Plusieurs licences par client**, y compris pour un client qui possède aussi un contrat
+- **Rappels automatiques** et escalades internes à J-15, J-10 et J-6
+- **Authentification JWT** et permissions par rôle
 
 ## 🏗️ Architecture
 
@@ -29,6 +30,8 @@ The project consists of two main components:
 - **Responsibility**: Manages client licenses only
 - **Permissions**:
   - Assign (affecter) licenses to clients
+  - Create and update shared client records
+  - Select licence offers maintained by the Admin
   - Renew or modify existing licenses
   - Track upcoming license expirations
 - **Access**: NO access to contracts
@@ -37,6 +40,8 @@ The project consists of two main components:
 - **Responsibility**: Manages client contracts only
 - **Permissions**:
   - Create and manage contracts for clients
+  - Create and update shared client records
+  - Select a contract type and compose priced service lines
   - Renew, modify, or terminate contracts
   - Track contract expiration dates
 - **Access**: NO access to licenses
@@ -47,6 +52,7 @@ The project consists of two main components:
   - View all activities and reports
   - Monitor system operations and user actions
   - Delete any resource
+  - Maintain the licence-offer and contract-type catalogues
 - **Access**: Full read access, limited write access
 
 ### 4. Executive
@@ -80,7 +86,19 @@ A daily cron job (default: 09:00 in `Africa/Tunis`) checks all active licenses a
 
 The unique notification history prevents duplicates. With no SMTP credentials, reminders are explicitly stored as `simulated`, never as sent. Administrators can inspect `GET /api/notifications/status`, run a check with `POST /api/notifications/run`, and review `GET /api/notifications/history`.
 
-## 🚀 Quick Start
+## 🚀 Démarrage avec Docker Compose
+
+```bash
+cp -n .env.example .env
+docker-compose -f ./compose.yaml up -d --build
+docker-compose -f ./compose.yaml --profile seed run --rm seed
+```
+
+Ouvrez `http://localhost:8080`. La commande de seed réinitialise les données de démonstration et crée aussi les deux catalogues.
+
+Le cron est actif dans le conteneur API. Sans identifiants SMTP, les rappels sont enregistrés comme **simulés**. Pour envoyer réellement les e-mails, renseignez `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS` et `EMAIL_FROM` dans `.env`, puis redémarrez le service API.
+
+## 🚀 Démarrage sans Docker
 
 ### Prerequisites
 
@@ -210,6 +228,12 @@ REACT_APP_API_URL=http://localhost:5000/api
 - `PUT /api/contracts/:id` - Update contract
 - `DELETE /api/contracts/:id` - Delete contract (admin only)
 
+### Catalogues
+- `GET /api/catalog/license-offers` - Offres actives (Agent et Admin)
+- `POST /api/catalog/license-offers` - Créer une offre (Admin)
+- `GET /api/catalog/contract-types` - Types actifs (Consultant et Admin)
+- `POST /api/catalog/contract-types` - Créer un type (Admin)
+
 ## 🧪 Testing
 
 ### Build Verification
@@ -231,9 +255,9 @@ npm run seed
 
 This creates:
 - 3 test users (agent, consultant, admin) with password: `password123`
-- 3 clients
-- 3 licenses (expiring in 15, 10, and 6 days)
-- 3 contracts (expiring in 15, 10, and 6 days)
+- 8 shared clients
+- 7 licence offers and 7 licences covering every urgency state
+- 7 contract types and 7 contracts with priced services
 
 ### Test Credentials
 

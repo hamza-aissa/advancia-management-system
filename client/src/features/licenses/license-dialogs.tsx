@@ -1,38 +1,40 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { FieldError, Modal, fieldClass, itemId, textareaClass } from './license-ui'
-import type { License, LicenseClientOption, LicenseInput, LicensePerson } from './types'
+import type { License, LicenseClientOption, LicenseInput, LicenseOffer } from './types'
 
 const optionalNumber = z.string().refine((value) => !value || (!Number.isNaN(Number(value)) && Number(value) >= 0), 'Saisissez un nombre positif').optional()
 const licenseSchema = z.object({
-  client: z.string().min(1, 'Sélectionnez un client'), name: z.string().trim().min(2, 'Saisissez le nom de la licence'),
+  client: z.string().min(1, 'Sélectionnez un client'), offer: z.string().min(1, 'Sélectionnez une offre'),
   description: z.string().optional(), startDate: z.string().min(1, 'Sélectionnez une date de début'), expiryDate: z.string().min(1, 'Sélectionnez une date d’échéance'),
-  value: optionalNumber, quantity: optionalNumber, owner: z.string().optional(),
+  quantity: z.string().refine((value) => Number.isFinite(Number(value)) && Number(value) > 0, 'La quantité doit être supérieure à zéro'),
 }).refine((data) => !data.startDate || !data.expiryDate || data.expiryDate > data.startDate, { path: ['expiryDate'], message: 'L’échéance doit être postérieure à la date de début' })
 
 type FormValues = z.input<typeof licenseSchema>
 const dateInput = (value?: string) => value ? value.slice(0, 10) : ''
 
-export function LicenseFormDialog({ open, license, clients, agents, isAdmin, busy, error, onClose, onSubmit }: {
-  open: boolean; license?: License; clients: LicenseClientOption[]; agents: LicensePerson[]; isAdmin: boolean; busy: boolean; error?: string; onClose: () => void; onSubmit: (input: LicenseInput) => void
+export function LicenseFormDialog({ open, license, initialClient = '', clients, offers, busy, error, onClose, onSubmit }: {
+  open: boolean; license?: License; initialClient?: string; clients: LicenseClientOption[]; offers: LicenseOffer[]; busy: boolean; error?: string; onClose: () => void; onSubmit: (input: LicenseInput | Partial<LicenseInput>) => void
 }) {
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormValues>({ resolver: zodResolver(licenseSchema), defaultValues: { quantity: '1' } })
+  const { register, control, handleSubmit, reset, formState: { errors } } = useForm<FormValues>({ resolver: zodResolver(licenseSchema), defaultValues: { quantity: '1' } })
   useEffect(() => reset(license ? {
-    client: itemId(license.client), name: license.name, description: license.description || '', startDate: dateInput(license.startDate), expiryDate: dateInput(license.expiryDate), value: license.value?.toString() || '', quantity: license.quantity?.toString() || '', owner: itemId(license.owner),
-  } : { client: '', name: '', description: '', startDate: '', expiryDate: '', value: '', quantity: '1', owner: '' }), [license, open, reset])
+    client: itemId(license.client), offer: license.offer ? itemId(license.offer) : '', description: license.description || '', startDate: dateInput(license.startDate), expiryDate: dateInput(license.expiryDate), quantity: license.quantity?.toString() || '1',
+  } : { client: initialClient, offer: '', description: '', startDate: '', expiryDate: '', quantity: '1' }), [initialClient, license, open, reset])
+  const selectedOfferId = useWatch({ control, name: 'offer' })
+  const selectedOffer = offers.find((offer) => itemId(offer) === selectedOfferId)
+  const quantity = Number(useWatch({ control, name: 'quantity' })) || 0
   return <Modal open={open} title={license ? 'Modifier la licence' : 'Nouvelle licence'} description="Renseignez les informations utiles au suivi du renouvellement." onClose={onClose}>
-    <form className="space-y-4" noValidate onSubmit={handleSubmit((values) => onSubmit({ ...values, value: values.value ? Number(values.value) : undefined, quantity: values.quantity ? Number(values.quantity) : undefined }))}>
+    <form className="space-y-4" noValidate onSubmit={handleSubmit((values) => onSubmit(license ? { description: values.description, quantity: Number(values.quantity) } : { ...values, quantity: Number(values.quantity) }))}>
       {error && <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">{error}</p>}
       <div><Label htmlFor="license-client">Client</Label><select id="license-client" className={fieldClass} disabled={Boolean(license)} aria-invalid={Boolean(errors.client)} {...register('client')}><option value="">Sélectionner un client</option>{clients.map((client) => <option key={itemId(client)} value={itemId(client)}>{client.name}</option>)}</select><FieldError message={errors.client?.message} /></div>
-      <div><Label htmlFor="license-name">Nom de la licence</Label><input id="license-name" className={fieldClass} aria-invalid={Boolean(errors.name)} {...register('name')} /><FieldError message={errors.name?.message} /></div>
+      <div><Label htmlFor="license-offer">Offre de licence</Label><select id="license-offer" className={fieldClass} disabled={Boolean(license)} aria-invalid={Boolean(errors.offer)} {...register('offer')}><option value="">Sélectionner une offre</option>{offers.map((offer) => <option key={itemId(offer)} value={itemId(offer)}>{offer.name} — {offer.unitPrice.toLocaleString('fr-TN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} TND/unité</option>)}</select><FieldError message={errors.offer?.message} /></div>
       <div><Label htmlFor="license-description">Description</Label><textarea id="license-description" className={textareaClass} {...register('description')} /></div>
       <div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="license-start">Date de début</Label><input id="license-start" type="date" className={fieldClass} disabled={Boolean(license)} {...register('startDate')} /><FieldError message={errors.startDate?.message} /></div><div><Label htmlFor="license-expiry">Date d’échéance</Label><input id="license-expiry" type="date" className={fieldClass} disabled={Boolean(license)} {...register('expiryDate')} /><FieldError message={errors.expiryDate?.message} /></div></div>
-      <div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="license-quantity">Quantité</Label><input id="license-quantity" type="number" min="0" className={fieldClass} {...register('quantity')} /><FieldError message={errors.quantity?.message} /></div><div><Label htmlFor="license-value">Valeur du renouvellement</Label><input id="license-value" type="number" min="0" step="0.01" className={fieldClass} {...register('value')} /><FieldError message={errors.value?.message} /></div></div>
-      {isAdmin && !license && <div><Label htmlFor="license-owner">Agent responsable</Label><select id="license-owner" className={fieldClass} aria-invalid={Boolean(errors.owner)} {...register('owner')}><option value="">Sélectionner un agent</option>{agents.map((agent) => <option key={itemId(agent)} value={itemId(agent)}>{agent.firstName} {agent.lastName}</option>)}</select><FieldError message={errors.owner?.message} /></div>}
+      <div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="license-quantity">Quantité</Label><input id="license-quantity" type="number" min="1" className={fieldClass} {...register('quantity')} /><FieldError message={errors.quantity?.message} /></div><div><Label>Valeur calculée</Label><div className="flex h-8 items-center rounded-md border bg-muted/40 px-3 font-mono text-sm font-medium">{(selectedOffer ? selectedOffer.unitPrice * quantity : license?.value)?.toLocaleString('fr-TN', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) || '—'} TND</div></div></div>
       <div className="flex justify-end gap-2 pt-2"><Button type="button" variant="outline" onClick={onClose}>Annuler</Button><Button disabled={busy}>{busy ? 'Enregistrement…' : license ? 'Enregistrer' : 'Créer la licence'}</Button></div>
     </form>
   </Modal>

@@ -46,10 +46,7 @@ const withComputedStatus = async (clients: ClientDocument[], role: UserRole): Pr
 };
 
 export const buildClientScope = (user: NonNullable<AuthRequest['user']>): FilterQuery<ClientDocument> => {
-  if (user.role === UserRole.ADMIN) return {};
-  if (user.role === UserRole.AGENT) return { assignedAgent: user.id };
-  if (user.role === UserRole.CONSULTANT) return { assignedConsultant: user.id };
-  return { _id: { $exists: false } };
+  return [UserRole.AGENT, UserRole.CONSULTANT, UserRole.ADMIN].includes(user.role) ? {} : { _id: { $exists: false } };
 };
 
 const validateAssignments = async (agentId?: string, consultantId?: string): Promise<boolean> => {
@@ -65,17 +62,10 @@ export const createClient = async (req: AuthRequest, res: Response): Promise<voi
     const input = { ...req.body };
     if (req.user!.role === UserRole.AGENT) input.assignedAgent = req.user!.id;
     if (req.user!.role === UserRole.CONSULTANT) input.assignedConsultant = req.user!.id;
-    if (req.user!.role === UserRole.ADMIN && (!input.assignedAgent || !input.assignedConsultant)) {
-      sendError(res, 422, 'INVALID_ASSIGNMENT', 'Admin-created clients require both assignments', {
-        assignedAgent: input.assignedAgent ? [] : ['Select an active agent'],
-        assignedConsultant: input.assignedConsultant ? [] : ['Select an active consultant']
-      });
-      return;
-    }
     if (!(await validateAssignments(input.assignedAgent, input.assignedConsultant))) {
-      sendError(res, 422, 'INVALID_ASSIGNMENT', 'Assigned users must be an agent and a consultant', {
-        assignedAgent: ['Select an active agent'],
-        assignedConsultant: ['Select an active consultant']
+      sendError(res, 422, 'INVALID_ASSIGNMENT', 'Les affectations doivent correspondre au bon département', {
+        assignedAgent: ['Sélectionnez un agent actif'],
+        assignedConsultant: ['Sélectionnez un consultant actif']
       });
       return;
     }
@@ -87,10 +77,10 @@ export const createClient = async (req: AuthRequest, res: Response): Promise<voi
   } catch (error: any) {
     console.error('Create client error:', error);
     if (error?.code === 11000) {
-      sendError(res, 422, 'VALIDATION_ERROR', 'Request validation failed', { email: ['A client with this email already exists'] });
+      sendError(res, 422, 'VALIDATION_ERROR', 'La validation a échoué', { email: ['Un client utilise déjà cette adresse e-mail'] });
       return;
     }
-    sendError(res, 500, 'INTERNAL_ERROR', 'Unable to create client');
+    sendError(res, 500, 'INTERNAL_ERROR', 'Impossible de créer le client');
   }
 };
 
@@ -117,7 +107,7 @@ export const getClients = async (req: AuthRequest, res: Response): Promise<void>
     res.json({ data: { clients: data } });
   } catch (error) {
     console.error('Get clients error:', error);
-    sendError(res, 500, 'INTERNAL_ERROR', 'Unable to retrieve clients');
+    sendError(res, 500, 'INTERNAL_ERROR', 'Impossible de charger les clients');
   }
 };
 
@@ -133,7 +123,7 @@ export const getClient = async (req: AuthRequest, res: Response): Promise<void> 
 
     if (!client) {
       // Returning 404 avoids disclosing that another employee owns the record.
-      sendError(res, 404, 'CLIENT_NOT_FOUND', 'Client not found');
+      sendError(res, 404, 'CLIENT_NOT_FOUND', 'Client introuvable');
       return;
     }
     const [decorated] = await withComputedStatus([client], req.user!.role);
@@ -145,7 +135,7 @@ export const getClient = async (req: AuthRequest, res: Response): Promise<void> 
     res.json({ data: { ...decorated, licenses, contracts } });
   } catch (error) {
     console.error('Get client error:', error);
-    sendError(res, 500, 'INTERNAL_ERROR', 'Unable to retrieve client');
+    sendError(res, 500, 'INTERNAL_ERROR', 'Impossible de charger le client');
   }
 };
 
@@ -159,15 +149,15 @@ export const updateClient = async (req: AuthRequest, res: Response): Promise<voi
     });
 
     if (!client) {
-      sendError(res, 404, 'CLIENT_NOT_FOUND', 'Client not found');
+      sendError(res, 404, 'CLIENT_NOT_FOUND', 'Client introuvable');
       return;
     }
 
     if (isAdmin && (req.body.assignedAgent || req.body.assignedConsultant)) {
       const agentId = req.body.assignedAgent ?? client.assignedAgent?.toString();
       const consultantId = req.body.assignedConsultant ?? client.assignedConsultant?.toString();
-      if (!agentId || !consultantId || !(await validateAssignments(agentId, consultantId))) {
-        sendError(res, 422, 'INVALID_ASSIGNMENT', 'Assigned users must be an agent and a consultant');
+      if (!(await validateAssignments(agentId, consultantId))) {
+        sendError(res, 422, 'INVALID_ASSIGNMENT', 'Les affectations doivent correspondre au bon département');
         return;
       }
     }
@@ -180,10 +170,10 @@ export const updateClient = async (req: AuthRequest, res: Response): Promise<voi
   } catch (error: any) {
     console.error('Update client error:', error);
     if (error?.code === 11000) {
-      sendError(res, 422, 'VALIDATION_ERROR', 'Request validation failed', { email: ['A client with this email already exists'] });
+      sendError(res, 422, 'VALIDATION_ERROR', 'La validation a échoué', { email: ['Un client utilise déjà cette adresse e-mail'] });
       return;
     }
-    sendError(res, 500, 'INTERNAL_ERROR', 'Unable to update client');
+    sendError(res, 500, 'INTERNAL_ERROR', 'Impossible de modifier le client');
   }
 };
 
@@ -195,12 +185,12 @@ export const archiveClient = async (req: AuthRequest, res: Response): Promise<vo
       { new: true }
     );
     if (!client) {
-      sendError(res, 404, 'CLIENT_NOT_FOUND', 'Client not found');
+      sendError(res, 404, 'CLIENT_NOT_FOUND', 'Client introuvable');
       return;
     }
     res.json({ data: client });
   } catch (error) {
     console.error('Archive client error:', error);
-    sendError(res, 500, 'INTERNAL_ERROR', 'Unable to archive client');
+    sendError(res, 500, 'INTERNAL_ERROR', 'Impossible d’archiver le client');
   }
 };

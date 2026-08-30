@@ -16,6 +16,20 @@ export interface ClientRef {
   email?: string
 }
 
+export interface ContractTypeRef {
+  id?: string
+  _id?: string
+  name: string
+  description?: string
+}
+
+export interface ContractService {
+  name: string
+  description?: string
+  quantity: number
+  unitPrice: number
+}
+
 export interface RenewalHistoryEntry {
   previousExpiryDate: string
   newExpiryDate: string
@@ -28,8 +42,10 @@ export interface Contract {
   id?: string
   _id?: string
   client: ClientRef | string
+  contractType?: ContractTypeRef | string
   title: string
   description?: string
+  services: ContractService[]
   startDate: string
   expiryDate: string
   value?: number

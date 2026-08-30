@@ -8,11 +8,14 @@ import { RenewalActivity } from '../models/RenewalActivity';
 import { AuthRequest } from '../middleware/auth';
 import { UserRole } from '../types';
 import { ExpiryBucket, expiryBucketFilter, getExpiryBucket, parseDate, recordActivity, daysUntil } from '../services/renewalDomain';
+import { ContractType } from '../models/ContractType';
+import { ContractService } from '../models/Contract';
 
 const fail = (res: Response, status: number, code: string, message: string) => res.status(status).json({ error: { code, message } });
 const validId = (value: unknown): value is string => typeof value === 'string' && mongoose.isValidObjectId(value);
 const admin = (req: AuthRequest) => req.user?.role === UserRole.ADMIN;
-const populate = (query: any) => query.populate('client').populate('managedBy', '-password');
+const populate = (query: any) => query.populate('client').populate('managedBy', '-password').populate('contractType');
+export const contractServicesValue = (services: ContractService[]) => services.reduce((total, service) => total + service.quantity * service.unitPrice, 0);
 const present = (doc: any) => { const raw = doc.toObject(), days = daysUntil(doc.expiryDate); return {
   ...raw, id: String(raw._id), owner: raw.managedBy,
   status: doc.archivedAt ? 'archived'
@@ -30,26 +33,39 @@ const openItem = (item: any) => item.isActive && !item.archivedAt && !['renewed'
 
 export const createContract = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { client, title, description, value } = req.body;
+    const { client, contractType, description, services } = req.body;
     const startDate = parseDate(req.body.startDate), expiryDate = parseDate(req.body.expiryDate);
-    if (!validId(client) || typeof title !== 'string' || !title.trim() || !startDate || !expiryDate || expiryDate <= startDate) {
-      fail(res, 400, 'VALIDATION_ERROR', 'Client, title and valid chronological dates are required'); return;
+    if (!validId(client) || !validId(contractType) || !startDate || !expiryDate || expiryDate <= startDate) {
+      fail(res, 400, 'VALIDATION_ERROR', 'Client, type et dates chronologiques valides sont requis'); return;
     }
-    const clientRecord = await Client.findOne({ _id: client, archivedAt: null });
-    if (!clientRecord) { fail(res, 404, 'CLIENT_NOT_FOUND', 'Client not found'); return; }
-    let owner = req.user!.id;
-    if (admin(req)) owner = req.body.owner;
+    const [clientRecord, type, existing] = await Promise.all([
+      Client.findOne({ _id: client, archivedAt: null }),
+      ContractType.findOne({ _id: contractType, active: true }),
+      Contract.exists({ client })
+    ]);
+    if (!clientRecord) { fail(res, 404, 'CLIENT_NOT_FOUND', 'Client introuvable'); return; }
+    if (!type) { fail(res, 404, 'CONTRACT_TYPE_NOT_FOUND', 'Type de contrat introuvable ou inactif'); return; }
+    if (existing) { fail(res, 409, 'CLIENT_ALREADY_HAS_CONTRACT', 'Ce client possède déjà un contrat. Renouvelez le contrat existant.'); return; }
+    const owner = req.user!.id;
     if (!validId(owner) || !(await User.exists({ _id: owner, role: UserRole.CONSULTANT }))) {
-      fail(res, 400, 'INVALID_OWNER', 'Owner must be a consultant'); return;
+      fail(res, 400, 'INVALID_OWNER', 'Le responsable doit être un consultant'); return;
     }
-    if (clientRecord.assignedConsultant?.toString() !== owner) {
-      fail(res, 403, 'CLIENT_SCOPE_DENIED', 'The selected client is not assigned to this consultant'); return;
+    if (clientRecord.assignedConsultant && clientRecord.assignedConsultant.toString() !== owner) {
+      fail(res, 403, 'CLIENT_SCOPE_DENIED', 'Ce client est déjà attribué à un autre consultant'); return;
     }
-    const item = await Contract.create({ client, title: title.trim(), description, startDate, expiryDate, value,
-      managedBy: owner, isActive: true, renewalStatus: 'not_contacted' });
+    if (!clientRecord.assignedConsultant) {
+      clientRecord.assignedConsultant = owner;
+      await clientRecord.save();
+    }
+    const item = await Contract.create({ client, contractType, title: type.name, description, services, startDate, expiryDate,
+      value: contractServicesValue(services), managedBy: owner, isActive: true, renewalStatus: 'not_contacted' });
     await recordActivity('contract', item._id as mongoose.Types.ObjectId, 'created', req.user!.id);
     res.status(201).json({ data: present(await populate(Contract.findById(item._id))) });
-  } catch (error) { console.error(error); fail(res, 500, 'INTERNAL_ERROR', 'Unable to create contract'); }
+  } catch (error: any) {
+    console.error(error);
+    if (error?.code === 11000) { fail(res, 409, 'CLIENT_ALREADY_HAS_CONTRACT', 'Ce client possède déjà un contrat. Renouvelez le contrat existant.'); return; }
+    fail(res, 500, 'INTERNAL_ERROR', 'Impossible de créer le contrat');
+  }
 };
 
 export const getContracts = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -66,32 +82,35 @@ export const getContracts = async (req: AuthRequest, res: Response): Promise<voi
     if (typeof req.query.search === 'string' && req.query.search.trim()) filter.title = { $regex: req.query.search.trim(), $options: 'i' };
     const items = await populate(Contract.find(filter).sort({ expiryDate: 1 }));
     res.json({ data: items.map(present) });
-  } catch { fail(res, 500, 'INTERNAL_ERROR', 'Unable to list contracts'); }
+  } catch { fail(res, 500, 'INTERNAL_ERROR', 'Impossible de charger les contrats'); }
 };
 
 export const getContract = async (req: AuthRequest, res: Response): Promise<void> => {
   const raw = await findOwned(req);
-  if (!raw) { fail(res, 404, 'CONTRACT_NOT_FOUND', 'Contract not found'); return; }
+  if (!raw) { fail(res, 404, 'CONTRACT_NOT_FOUND', 'Contrat introuvable'); return; }
   res.json({ data: present(await populate(Contract.findById(raw._id))) });
 };
 
 export const updateContract = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const item = await findOwned(req);
-    if (!item) { fail(res, 404, 'CONTRACT_NOT_FOUND', 'Contract not found'); return; }
-    for (const key of ['description', 'value'] as const) if (req.body[key] !== undefined) (item as any)[key] = req.body[key];
-    if (typeof req.body.title === 'string' && req.body.title.trim()) item.title = req.body.title.trim();
+    if (!item) { fail(res, 404, 'CONTRACT_NOT_FOUND', 'Contrat introuvable'); return; }
+    if (req.body.description !== undefined) item.description = req.body.description;
+    if (req.body.services !== undefined) {
+      item.services = req.body.services;
+      item.value = contractServicesValue(req.body.services);
+    }
     await item.save();
     await recordActivity('contract', item._id as mongoose.Types.ObjectId, 'updated', req.user!.id);
     res.json({ data: present(await populate(Contract.findById(item._id))) });
-  } catch { fail(res, 500, 'INTERNAL_ERROR', 'Unable to update contract'); }
+  } catch { fail(res, 500, 'INTERNAL_ERROR', 'Impossible de modifier le contrat'); }
 };
 
 const act = async (req: AuthRequest, res: Response, action: 'contacted'|'follow_up_scheduled'|'renewed'|'declined') => {
   try {
     const item = await findOwned(req);
-    if (!item) { fail(res, 404, 'CONTRACT_NOT_FOUND', 'Contract not found'); return; }
-    if (!openItem(item)) { fail(res, 409, 'ITEM_NOT_OPEN', 'Only an open active contract can receive renewal actions'); return; }
+    if (!item) { fail(res, 404, 'CONTRACT_NOT_FOUND', 'Contrat introuvable'); return; }
+    if (!openItem(item)) { fail(res, 409, 'ITEM_NOT_OPEN', 'Seul un contrat actif et ouvert peut recevoir une action de renouvellement'); return; }
     const now = new Date(); let metadata: Record<string, unknown> | undefined;
     if (action === 'contacted') {
       item.renewalStatus = 'contacted';
@@ -100,20 +119,20 @@ const act = async (req: AuthRequest, res: Response, action: 'contacted'|'follow_
     }
     if (action === 'follow_up_scheduled') {
       const date = parseDate(req.body.nextFollowUpAt);
-      if (!date) { fail(res, 400, 'VALIDATION_ERROR', 'Valid nextFollowUpAt is required'); return; }
+      if (!date) { fail(res, 400, 'VALIDATION_ERROR', 'Une date de relance valide est requise'); return; }
       item.renewalStatus = 'waiting'; item.nextFollowUpAt = date;
     }
     if (action === 'declined') {
-      if (typeof req.body.reason !== 'string' || !req.body.reason.trim()) { fail(res, 400, 'VALIDATION_ERROR', 'Decline reason is required'); return; }
+      if (typeof req.body.reason !== 'string' || !req.body.reason.trim()) { fail(res, 400, 'VALIDATION_ERROR', 'Le motif du refus est requis'); return; }
       item.renewalStatus = 'declined'; item.declineReason = req.body.reason.trim(); item.nextFollowUpAt = undefined; item.isActive = false;
     }
     if (action === 'renewed') {
       const date = parseDate(req.body.expiryDate);
-      if (!date || date <= item.expiryDate) { fail(res, 400, 'VALIDATION_ERROR', 'New expiry date must follow current expiry date'); return; }
+      if (!date || date <= item.expiryDate) { fail(res, 400, 'VALIDATION_ERROR', 'La nouvelle échéance doit être postérieure à l’échéance actuelle'); return; }
       const previousStartDate = item.startDate;
       const previousExpiryDate = item.expiryDate;
       const newStartDate = parseDate(req.body.startDate) ?? previousExpiryDate;
-      if (date <= newStartDate) { fail(res, 400, 'VALIDATION_ERROR', 'New expiry date must follow new start date'); return; }
+      if (date <= newStartDate) { fail(res, 400, 'VALIDATION_ERROR', 'La nouvelle échéance doit être postérieure à la date de début'); return; }
       item.renewalHistory.push({ previousStartDate, previousExpiryDate, newStartDate, newExpiryDate: date, renewedAt: now,
         renewedBy: new mongoose.Types.ObjectId(req.user!.id), value: req.body.value });
       item.startDate = newStartDate; item.expiryDate = date; item.renewalStatus = 'not_contacted'; item.isActive = true;
@@ -124,7 +143,7 @@ const act = async (req: AuthRequest, res: Response, action: 'contacted'|'follow_
     item.lastActionAt = now; await item.save();
     await recordActivity('contract', item._id as mongoose.Types.ObjectId, action, req.user!.id, req.body.note, metadata);
     res.json({ data: present(await populate(Contract.findById(item._id))) });
-  } catch (error) { console.error(error); fail(res, 500, 'INTERNAL_ERROR', 'Unable to apply renewal action'); }
+  } catch (error) { console.error(error); fail(res, 500, 'INTERNAL_ERROR', 'Impossible d’appliquer l’action de renouvellement'); }
 };
 
 export const markContractContacted = (req: AuthRequest, res: Response) => act(req, res, 'contacted');
@@ -134,27 +153,27 @@ export const declineContract = (req: AuthRequest, res: Response) => act(req, res
 
 export const assignContract = async (req: AuthRequest, res: Response): Promise<void> => {
   if (req.body.owner !== null && (!validId(req.body.owner) || !(await User.exists({ _id: req.body.owner, role: UserRole.CONSULTANT })))) {
-    fail(res, 400, 'INVALID_OWNER', 'Owner must be a consultant'); return;
+    fail(res, 400, 'INVALID_OWNER', 'Le responsable doit être un consultant'); return;
   }
   const item = validId(req.params.id) ? await Contract.findById(req.params.id) : null;
-  if (!item) { fail(res, 404, 'CONTRACT_NOT_FOUND', 'Contract not found'); return; }
+  if (!item) { fail(res, 404, 'CONTRACT_NOT_FOUND', 'Contrat introuvable'); return; }
   const previousOwner = item.managedBy?.toString() ?? null;
   item.managedBy = req.body.owner ?? undefined; await item.save();
   await Client.updateOne({ _id: item.client }, { assignedConsultant: req.body.owner ?? null });
-  await recordActivity('contract', item._id as mongoose.Types.ObjectId, 'reassigned', req.user!.id, 'Owner reassigned', { previousOwner, newOwner: req.body.owner });
+  await recordActivity('contract', item._id as mongoose.Types.ObjectId, 'reassigned', req.user!.id, 'Responsable réattribué', { previousOwner, newOwner: req.body.owner });
   res.json({ data: present(await populate(Contract.findById(item._id))) });
 };
 
 export const getContractActivity = async (req: AuthRequest, res: Response): Promise<void> => {
   const item = await findOwned(req);
-  if (!item) { fail(res, 404, 'CONTRACT_NOT_FOUND', 'Contract not found'); return; }
+  if (!item) { fail(res, 404, 'CONTRACT_NOT_FOUND', 'Contrat introuvable'); return; }
   const data = await RenewalActivity.find({ itemType: 'contract', itemId: item._id }).populate('performedBy', '-password').sort({ createdAt: -1 });
   res.json({ data });
 };
 
 export const deleteContract = async (req: AuthRequest, res: Response): Promise<void> => {
   const item = validId(req.params.id) ? await Contract.findOne({ _id: req.params.id, archivedAt: null }) : null;
-  if (!item) { fail(res, 404, 'CONTRACT_NOT_FOUND', 'Contract not found'); return; }
+  if (!item) { fail(res, 404, 'CONTRACT_NOT_FOUND', 'Contrat introuvable'); return; }
   item.isActive = false; item.archivedAt = new Date(); item.nextFollowUpAt = undefined; await item.save();
   await recordActivity('contract', item._id as mongoose.Types.ObjectId, 'archived', req.user!.id);
   res.json({ data: { id: String(item._id), archived: true } });

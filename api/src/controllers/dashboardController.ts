@@ -80,7 +80,7 @@ const sendValidationError = (res: Response, error: z.ZodError): void => {
     const field = issue.path.join('.') || 'query';
     (fields[field] ??= []).push(issue.message);
   }
-  sendError(res, 422, 'VALIDATION_ERROR', 'Request validation failed', fields);
+  sendError(res, 422, 'VALIDATION_ERROR', 'La validation a échoué', fields);
 };
 
 export const getDashboard = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -89,7 +89,7 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
   } catch (error) {
     if (error instanceof z.ZodError) return sendValidationError(res, error);
     console.error('Dashboard error:', error);
-    sendError(res, 500, 'INTERNAL_ERROR', 'Unable to load dashboard');
+    sendError(res, 500, 'INTERNAL_ERROR', 'Impossible de charger le tableau de bord');
   }
 };
 
@@ -99,6 +99,6 @@ export const getActions = async (req: AuthRequest, res: Response): Promise<void>
   } catch (error) {
     if (error instanceof z.ZodError) return sendValidationError(res, error);
     console.error('Actions error:', error);
-    sendError(res, 500, 'INTERNAL_ERROR', 'Unable to load actions');
+    sendError(res, 500, 'INTERNAL_ERROR', 'Impossible de charger les actions');
   }
 };

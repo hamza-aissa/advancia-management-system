@@ -7,7 +7,7 @@ import { sendError } from '../utils/errors';
 export const getAssignableUsers = async (req: AuthRequest, res: Response): Promise<void> => {
   const role = req.query.role;
   if (role !== UserRole.AGENT && role !== UserRole.CONSULTANT) {
-    sendError(res, 422, 'VALIDATION_ERROR', 'Request validation failed', {
+    sendError(res, 422, 'VALIDATION_ERROR', 'La validation a échoué', {
       role: ['Role must be agent or consultant']
     });
     return;
@@ -20,6 +20,6 @@ export const getAssignableUsers = async (req: AuthRequest, res: Response): Promi
     res.json({ data: { users } });
   } catch (error) {
     console.error('Get users error:', error);
-    sendError(res, 500, 'INTERNAL_ERROR', 'Unable to retrieve users');
+    sendError(res, 500, 'INTERNAL_ERROR', 'Impossible de charger les utilisateurs');
   }
 };

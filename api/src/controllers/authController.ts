@@ -13,7 +13,7 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
     const user = await User.findOne({ email });
 
     if (!user || !(await bcrypt.compare(req.body.password, user.password))) {
-      sendError(res, 401, 'INVALID_CREDENTIALS', 'Invalid email or password');
+      sendError(res, 401, 'INVALID_CREDENTIALS', 'Adresse e-mail ou mot de passe incorrect');
       return;
     }
 
@@ -37,7 +37,7 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
     });
   } catch (error) {
     console.error('Login error:', error);
-    sendError(res, 500, 'INTERNAL_ERROR', 'Unable to log in');
+    sendError(res, 500, 'INTERNAL_ERROR', 'Impossible de vous connecter');
   }
 };
 
@@ -45,12 +45,12 @@ export const getProfile = async (req: AuthRequest, res: Response): Promise<void>
   try {
     const user = await User.findById(req.user?.id).select('-password');
     if (!user) {
-      sendError(res, 404, 'USER_NOT_FOUND', 'User not found');
+      sendError(res, 404, 'USER_NOT_FOUND', 'Utilisateur introuvable');
       return;
     }
     res.json({ data: user });
   } catch (error) {
     console.error('Get profile error:', error);
-    sendError(res, 500, 'INTERNAL_ERROR', 'Unable to retrieve profile');
+    sendError(res, 500, 'INTERNAL_ERROR', 'Impossible de charger le profil');
   }
 };

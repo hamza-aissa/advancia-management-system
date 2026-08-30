@@ -4,14 +4,14 @@ import { UserRole } from '../types';
 import { createClientSchema } from '../routes/clients';
 
 describe('client access scoping', () => {
-  it('scopes an agent to assignedAgent', () => {
+  it('opens the shared client directory to agents', () => {
     expect(buildClientScope({ id: 'agent-id', email: 'a@test.dev', role: UserRole.AGENT }))
-      .toEqual({ assignedAgent: 'agent-id' });
+      .toEqual({});
   });
 
-  it('scopes a consultant to assignedConsultant', () => {
+  it('opens the shared client directory to consultants', () => {
     expect(buildClientScope({ id: 'consultant-id', email: 'c@test.dev', role: UserRole.CONSULTANT }))
-      .toEqual({ assignedConsultant: 'consultant-id' });
+      .toEqual({});
   });
 
   it('allows admins to query across assignments', () => {

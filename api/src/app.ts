@@ -8,6 +8,7 @@ import contractRoutes from './routes/contracts';
 import userRoutes from './routes/users';
 import dashboardRoutes from './routes/dashboard';
 import notificationRoutes from './routes/notifications';
+import catalogRoutes from './routes/catalogs';
 import { errorHandler, notFoundHandler } from './utils/errors';
 
 export const createApp = () => {
@@ -24,6 +25,7 @@ export const createApp = () => {
   app.use('/api/licenses', licenseRoutes);
   app.use('/api/contracts', contractRoutes);
   app.use('/api/notifications', notificationRoutes);
+  app.use('/api/catalog', catalogRoutes);
 
   app.get('/health', (_req, res) => {
     res.json({ data: { status: 'ok', timestamp: new Date().toISOString() } });

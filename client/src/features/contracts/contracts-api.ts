@@ -1,16 +1,15 @@
 import { api } from '@/lib/api'
-import type { ClientRef, Contract, PersonRef, RenewalActivity } from './types'
+import type { ClientRef, Contract, ContractService, PersonRef, RenewalActivity } from './types'
 
 type Envelope<T> = { data: T }
 
 export interface ContractInput {
   client: string
-  title: string
+  contractType: string
   description?: string
   startDate: string
   expiryDate: string
-  value?: number
-  owner?: string
+  services: ContractService[]
 }
 
 export const contractsApi = {

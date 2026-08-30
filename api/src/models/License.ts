@@ -15,6 +15,7 @@ export interface RenewalHistoryEntry {
 
 export interface LicenseDocument extends Document {
   client: Types.ObjectId;
+  offer?: Types.ObjectId;
   name: string;
   description?: string;
   startDate: Date;
@@ -45,6 +46,7 @@ const renewalHistorySchema = new Schema<RenewalHistoryEntry>({
 
 const licenseSchema = new Schema<LicenseDocument>({
   client: { type: Schema.Types.ObjectId, ref: 'Client', required: true },
+  offer: { type: Schema.Types.ObjectId, ref: 'LicenseOffer', index: true },
   name: { type: String, required: true, trim: true },
   description: { type: String, trim: true },
   startDate: { type: Date, required: true },

@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils'
 import type { RenewalStatus, Urgency } from './types'
 
 const urgencyStyles: Record<Urgency, string> = {
-  expired: 'bg-slate-900 text-white',
+  expired: 'bg-foreground text-background',
   critical: 'bg-red-100 text-red-800 ring-red-200',
   urgent: 'bg-orange-100 text-orange-800 ring-orange-200',
   upcoming: 'bg-amber-100 text-amber-800 ring-amber-200',
@@ -32,4 +32,4 @@ export const textareaClass = 'flex min-h-24 w-full rounded-md border border-inpu
 export function FieldError({ children }: { children?: string }) { return children ? <p className="mt-1 text-xs text-red-600">{children}</p> : null }
 
 export const formatDate = (value?: string) => value ? new Intl.DateTimeFormat('fr-TN', { dateStyle: 'medium' }).format(new Date(value)) : '—'
-export const formatMoney = (value?: number) => value === undefined ? '—' : new Intl.NumberFormat('fr-TN', { maximumFractionDigits: 0 }).format(value)
+export const formatMoney = (value?: number) => value === undefined ? '—' : `${new Intl.NumberFormat('fr-TN', { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(value)} TND`

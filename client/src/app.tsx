@@ -8,6 +8,7 @@ import { MyActionsPage } from '@/features/actions'
 import { ClientsPage, ClientDetailPage } from '@/features/clients'
 import { ContractsPage, ContractDetailPage } from '@/features/contracts'
 import { LicensesPage, LicenseDetailPage } from '@/features/licenses'
+import { CatalogsPage } from '@/features/catalogs'
 import type { UserRole } from '@/types'
 
 function ProtectedRoute({ roles }: { roles?: UserRole[] }) {
@@ -39,6 +40,7 @@ const router = createBrowserRouter([
   ] }] },
   { element: <ProtectedRoute roles={['admin']} />, children: [{ element: <AppShell />, children: [
     { path: '/admin', element: <AdminOverviewPage /> },
+    { path: '/catalogues', element: <CatalogsPage /> },
   ] }] },
   { path: '*', element: <Navigate to="/dashboard" replace /> },
 ])

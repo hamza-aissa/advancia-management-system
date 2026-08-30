@@ -16,6 +16,15 @@ export interface LicenseClient {
   email?: string
 }
 
+export interface LicenseOffer {
+  id: string
+  _id?: string
+  name: string
+  description?: string
+  unitPrice: number
+  active: boolean
+}
+
 export interface RenewalHistoryEntry {
   previousExpiryDate: string
   newExpiryDate: string
@@ -28,6 +37,7 @@ export interface License {
   id: string
   _id?: string
   client: LicenseClient
+  offer?: LicenseOffer
   name: string
   description?: string
   startDate: string
@@ -74,11 +84,9 @@ export interface LicenseFilters {
 
 export interface LicenseInput {
   client: string
-  name: string
+  offer: string
   description?: string
   startDate: string
   expiryDate: string
-  value?: number
-  quantity?: number
-  owner?: string
+  quantity: number
 }

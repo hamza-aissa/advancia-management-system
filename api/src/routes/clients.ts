@@ -36,7 +36,7 @@ const operationalUpdateSchema = z.object({
   ...commonOperationalFields
 })
   .strict()
-  .refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required' });
+  .refine((value) => Object.keys(value).length > 0, { message: 'Au moins un champ est requis' });
 
 const adminUpdateSchema = z.object({
   name: z.string().trim().min(2).max(160).optional(),
@@ -48,7 +48,7 @@ const adminUpdateSchema = z.object({
   ...commonOperationalFields
 })
   .strict()
-  .refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required' });
+  .refine((value) => Object.keys(value).length > 0, { message: 'Au moins un champ est requis' });
 
 const validateClientUpdate = (req: AuthRequest, res: Response, next: NextFunction): void => {
   const schema = req.user?.role === UserRole.ADMIN ? adminUpdateSchema : operationalUpdateSchema;

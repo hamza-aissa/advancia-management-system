@@ -33,6 +33,14 @@ describe('séparation stricte des départements', () => {
     expect(response.body.error.code).toBe('FORBIDDEN');
   });
 
+  it('réserve la gestion des catalogues à l’administrateur', async () => {
+    const response = await request(app)
+      .post('/api/catalog/license-offers')
+      .set('Authorization', `Bearer ${authenticated(UserRole.AGENT)}`)
+      .send({ name: 'Offre', unitPrice: 100 });
+    expect(response.status).toBe(403);
+  });
+
   it("réserve l'état du cron et son déclenchement à l'administrateur", async () => {
     const response = await request(app)
       .get('/api/notifications/status')

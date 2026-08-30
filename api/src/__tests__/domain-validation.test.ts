@@ -1,6 +1,9 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { contractCreateSchema, followUpSchema, licenseCreateSchema, licenseUpdateSchema, renewSchema } from '../routes/domainValidation';
 import { daysUntil, getExpiryBucket, startOfUtcDay } from '../services/renewalDomain';
+import { contractServicesValue } from '../controllers/contractController';
+import { Contract } from '../models/Contract';
+import { License } from '../models/License';
 
 const id = '507f1f77bcf86cd799439011';
 
@@ -9,20 +12,29 @@ describe('domain validation and lifecycle boundaries', () => {
 
   it('rejects invalid licence quantity, negative values, and reversed dates', () => {
     const result = licenseCreateSchema.safeParse({
-      client: id, name: 'Suite', startDate: '2026-09-02T00:00:00.000Z',
-      expiryDate: '2026-09-01T00:00:00.000Z', quantity: 0, value: -1
+      client: id, offer: id, startDate: '2026-09-02T00:00:00.000Z',
+      expiryDate: '2026-09-01T00:00:00.000Z', quantity: 0
     });
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.flatten().fieldErrors).toMatchObject({
-      expiryDate: expect.any(Array), quantity: expect.any(Array), value: expect.any(Array)
+      expiryDate: expect.any(Array), quantity: expect.any(Array)
     });
   });
 
-  it('accepts valid contract dates and non-negative value', () => {
+  it('accepts a typed contract with priced services', () => {
     expect(contractCreateSchema.safeParse({
-      client: id, title: 'Support', startDate: '2026-09-01T00:00:00.000Z',
-      expiryDate: '2027-09-01T00:00:00.000Z', value: 0
+      client: id, contractType: id, startDate: '2026-09-01T00:00:00.000Z',
+      expiryDate: '2027-09-01T00:00:00.000Z',
+      services: [{ name: 'Support', quantity: 2, unitPrice: 125 }]
     }).success).toBe(true);
+    expect(contractServicesValue([{ name: 'Support', quantity: 2, unitPrice: 125 }])).toBe(250);
+  });
+
+  it('enforces one contract per client while allowing several licences', () => {
+    const contractClientIndex = Contract.schema.indexes().find(([fields]) => fields.client === 1);
+    expect(contractClientIndex?.[1]).toMatchObject({ unique: true });
+    const licenceClientIndex = License.schema.indexes().find(([fields]) => fields.client === 1);
+    expect(licenceClientIndex?.[1]?.unique).not.toBe(true);
   });
 
   it('rejects unsafe updates and past follow-ups', () => {

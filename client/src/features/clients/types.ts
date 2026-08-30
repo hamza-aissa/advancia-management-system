@@ -23,8 +23,8 @@ export interface ClientInput {
   email: string
   phone?: string
   address?: string
-  assignedAgent: string
-  assignedConsultant: string
+  assignedAgent?: string
+  assignedConsultant?: string
   notes?: string
   lastContactAt?: string | null
 }

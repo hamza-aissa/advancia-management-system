@@ -13,7 +13,7 @@ export const validate = (schema: ZodType, part: RequestPart = 'body') =>
         const key = issue.path.join('.') || part;
         (fields[key] ??= []).push(issue.message);
       }
-      sendError(res, 422, 'VALIDATION_ERROR', 'Request validation failed', fields);
+      sendError(res, 422, 'VALIDATION_ERROR', 'La validation a échoué', fields);
       return;
     }
 
