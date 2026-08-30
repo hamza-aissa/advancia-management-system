@@ -35,8 +35,8 @@ export const authenticate = async (
       role: UserRole;
     };
 
-    const user = await User.findById(decoded.id).select('email role');
-    if (!user) {
+    const user = await User.findById(decoded.id).select('email role active');
+    if (!user || user.active === false) {
       sendError(res, 401, 'INVALID_TOKEN', 'Session invalide ou expirée');
       return;
     }

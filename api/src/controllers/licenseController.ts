@@ -173,8 +173,8 @@ export const getLicenseActivity = async (req: AuthRequest, res: Response): Promi
 };
 
 export const deleteLicense = async (req: AuthRequest, res: Response): Promise<void> => {
-  const item = validId(req.params.id) ? await License.findOne({ _id: req.params.id, archivedAt: null }) : null;
-  if (!item) { fail(res, 404, 'LICENSE_NOT_FOUND', 'Licence introuvable'); return; }
+  const item = await findOwned(req);
+  if (!item || item.archivedAt) { fail(res, 404, 'LICENSE_NOT_FOUND', 'Licence introuvable'); return; }
   item.isActive = false; item.archivedAt = new Date(); item.nextFollowUpAt = undefined; await item.save();
   await recordActivity('license', item._id as mongoose.Types.ObjectId, 'archived', req.user!.id);
   res.json({ data: { id: String(item._id), archived: true } });

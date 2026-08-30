@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { Activity, BookOpen, Building2, ClipboardCheck, FileKey2, FileText, LayoutDashboard, LogOut, Menu, ShieldCheck, X } from 'lucide-react'
+import { Activity, BookOpen, Building2, ClipboardCheck, FileKey2, FileText, LayoutDashboard, LogOut, Menu, ShieldCheck, UserCog, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/auth-context'
 import { cn } from '@/lib/utils'
@@ -16,6 +16,7 @@ const navigation: NavigationItem[] = [
   { label: 'Licences', to: '/licenses', icon: FileKey2, roles: ['agent', 'admin'] },
   { label: 'Supervision', to: '/admin', icon: ShieldCheck, roles: ['admin'] },
   { label: 'Catalogues', to: '/catalogues', icon: BookOpen, roles: ['admin'] },
+  { label: 'Équipe', to: '/equipe', icon: UserCog, roles: ['admin'] },
 ]
 
 const routeTitles: Record<string, { eyebrow: string; title: string }> = {
@@ -26,6 +27,7 @@ const routeTitles: Record<string, { eyebrow: string; title: string }> = {
   '/licenses': { eyebrow: 'Échéances', title: 'Licences' },
   '/admin': { eyebrow: 'Pilotage', title: 'Supervision' },
   '/catalogues': { eyebrow: 'Administration', title: 'Catalogues' },
+  '/equipe': { eyebrow: 'Administration', title: 'Équipe' },
 }
 
 function Brand() {

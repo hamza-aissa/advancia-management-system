@@ -35,6 +35,6 @@ router.get('/:id/activity', authorize(UserRole.AGENT, UserRole.ADMIN), validate(
 router.get('/:id', authorize(UserRole.AGENT, UserRole.ADMIN), validate(idParamsSchema, 'params'), getLicense);
 router.patch('/:id', writeLimiter, authorize(UserRole.AGENT), validate(idParamsSchema, 'params'), validate(licenseUpdateSchema), updateLicense);
 router.put('/:id', writeLimiter, authorize(UserRole.AGENT), validate(idParamsSchema, 'params'), validate(licenseUpdateSchema), updateLicense);
-router.delete('/:id', writeLimiter, authorize(UserRole.ADMIN), validate(idParamsSchema, 'params'), deleteLicense);
+router.delete('/:id', writeLimiter, authorize(UserRole.AGENT, UserRole.ADMIN), validate(idParamsSchema, 'params'), deleteLicense);
 
 export default router;

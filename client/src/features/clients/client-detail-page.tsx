@@ -12,6 +12,7 @@ import { archiveClient, clientKeys, getAssignableUsers, getClient, getFieldError
 import { ClientForm } from './client-form'
 import { ClientContact, Person, StatusBadge } from './client-ui'
 import type { ClientUpdate } from './types'
+import { ClientOperations } from './client-operations'
 
 function formatDate(value?: string | null) { return value ? new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Non renseigné' }
 
@@ -43,6 +44,7 @@ export function ClientDetailPage() {
       <Card><CardHeader><CardTitle className="text-base">Suivi</CardTitle></CardHeader><CardContent className="space-y-4"><div className="flex items-start gap-3"><CalendarClock className="mt-0.5 size-4 text-muted-foreground" /><div><p className="text-xs font-semibold text-muted-foreground">Dernier contact</p><p className="mt-1 text-sm">{formatDate(client.lastContactAt)}</p></div></div><div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 size-4 text-muted-foreground" /><div><p className="text-xs font-semibold text-muted-foreground">Statut du compte</p><p className="mt-1 text-sm">{client.status === 'at_risk' ? 'Une échéance arrive dans moins de 15 jours.' : 'Aucun risque de renouvellement immédiat.'}</p></div></div></CardContent></Card>
     </div>
     <Card><CardHeader><CardTitle className="text-base">Notes opérationnelles</CardTitle></CardHeader><CardContent><p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{client.notes || 'Aucune note enregistrée.'}</p></CardContent></Card>
+    <ClientOperations client={client} />
     <Dialog open={editOpen} onOpenChange={setEditOpen} title="Modifier le client" description={isAdmin ? 'Modifiez les coordonnées, les affectations et le contexte.' : 'Modifiez les coordonnées et le contexte sans changer les affectations.'}>
       {isAdmin && (agentsQuery.isPending || consultantsQuery.isPending) ? <PageLoader label="Chargement de l’équipe" /> : isAdmin && (agentsQuery.isError || consultantsQuery.isError) ? <div className="p-6"><ErrorState message="Impossible de charger les collaborateurs disponibles." /></div> : <ClientForm mode={isAdmin ? 'admin-edit' : 'operational-edit'} client={client} agents={agentsQuery.data} consultants={consultantsQuery.data} isSubmitting={updateMutation.isPending} serverErrors={serverErrors} onCancel={() => setEditOpen(false)} onSubmit={(input) => updateMutation.mutate(input)} />}
       {updateMutation.isError && Object.keys(serverErrors).length === 0 && <p className="px-6 pb-6 text-sm text-destructive" role="alert">{getApiErrorMessage(updateMutation.error, 'Impossible de modifier ce client.')}</p>}

@@ -1,4 +1,6 @@
 import type { User } from '@/types'
+import type { License } from '@/features/licenses/types'
+import type { Contract } from '@/features/contracts/types'
 
 export type ClientStatus = 'active' | 'at_risk' | 'inactive'
 
@@ -16,6 +18,8 @@ export interface Client {
   archivedAt?: string | null
   createdAt: string
   updatedAt: string
+  licenses?: License[]
+  contracts?: Contract[]
 }
 
 export interface ClientInput {

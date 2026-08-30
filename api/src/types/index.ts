@@ -16,6 +16,7 @@ export interface IUser {
   firstName: string;
   lastName: string;
   role: UserRole;
+  active: boolean;
 }
 
 export interface IClient {

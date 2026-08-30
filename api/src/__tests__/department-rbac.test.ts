@@ -7,6 +7,7 @@ import { config } from '../config';
 import { User } from '../models/User';
 import { UserRole } from '../types';
 import { redactClientForRole } from '../controllers/clientController';
+import { License } from '../models/License';
 
 const authenticated = (role: UserRole) => {
   const user = { _id: new Types.ObjectId(), email: `${role}@advancia.test`, role };
@@ -31,6 +32,15 @@ describe('séparation stricte des départements', () => {
       .set('Authorization', `Bearer ${authenticated(UserRole.CONSULTANT)}`);
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe('FORBIDDEN');
+  });
+
+  it('autorise un Agent à demander l’archivage de sa propre licence', async () => {
+    vi.spyOn(License, 'findById').mockResolvedValue(null);
+    const response = await request(app)
+      .delete(`/api/licenses/${new Types.ObjectId()}`)
+      .set('Authorization', `Bearer ${authenticated(UserRole.AGENT)}`);
+    expect(response.status).toBe(404);
+    expect(response.body.error.code).toBe('LICENSE_NOT_FOUND');
   });
 
   it('réserve la gestion des catalogues à l’administrateur', async () => {

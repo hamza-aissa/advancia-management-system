@@ -50,7 +50,7 @@ export const contractUpdateSchema = z.object({
 
 export const noteSchema = z.object({ note: optionalText(2000) }).strict();
 export const followUpSchema = z.object({
-  nextFollowUpAt: isoDate.refine((value) => new Date(value) > new Date(), 'Follow-up must be in the future'),
+  nextFollowUpAt: isoDate.refine((value) => new Date(value) > new Date(), 'La relance doit être planifiée dans le futur'),
   note: optionalText(2000)
 }).strict();
 export const renewSchema = z.object({

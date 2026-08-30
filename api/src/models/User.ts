@@ -30,6 +30,11 @@ const userSchema = new Schema<UserDocument>(
       type: String,
       enum: Object.values(UserRole),
       required: true
+    },
+    active: {
+      type: Boolean,
+      default: true,
+      index: true
     }
   },
   {

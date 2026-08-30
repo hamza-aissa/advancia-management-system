@@ -54,6 +54,28 @@ describe('authentication boundary and validation', () => {
     expect(response.body.data.token).toEqual(expect.any(String));
   });
 
+  it('refuses login for a deactivated collaborator', async () => {
+    const user = { ...databaseUser(UserRole.AGENT), active: false };
+    vi.spyOn(User, 'findOne').mockResolvedValue(null);
+    const response = await request(app).post('/api/auth/login').send({ email: user.email, password: 'password123' });
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('INVALID_CREDENTIALS');
+  });
+
+  it('lets an Admin create an Agent account through the protected endpoint', async () => {
+    const admin = databaseUser(UserRole.ADMIN);
+    vi.spyOn(User, 'findById').mockReturnValue({ select: vi.fn().mockResolvedValue(admin) } as never);
+    vi.spyOn(User, 'create').mockResolvedValue({
+      _id: new Types.ObjectId(), firstName: 'Nouveau', lastName: 'Agent', email: 'nouveau@advancia.test', role: UserRole.AGENT, active: true
+    } as never);
+    const token = jwt.sign({ id: admin._id.toString(), email: admin.email, role: admin.role }, config.jwtSecret);
+    const response = await request(app).post('/api/users').set('Authorization', `Bearer ${token}`).send({
+      firstName: 'Nouveau', lastName: 'Agent', email: 'nouveau@advancia.test', password: 'password123', role: UserRole.AGENT
+    });
+    expect(response.status).toBe(201);
+    expect(response.body.data).toMatchObject({ email: 'nouveau@advancia.test', role: UserRole.AGENT, active: true });
+  });
+
   it('does not represent executive notification recipients as application accounts', async () => {
     vi.spyOn(User, 'findOne').mockResolvedValue(null);
     const response = await request(app)

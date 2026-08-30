@@ -10,7 +10,7 @@ import { sendError } from '../utils/errors';
 export const login = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const email = req.body.email.toLowerCase();
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email, active: { $ne: false } });
 
     if (!user || !(await bcrypt.compare(req.body.password, user.password))) {
       sendError(res, 401, 'INVALID_CREDENTIALS', 'Adresse e-mail ou mot de passe incorrect');

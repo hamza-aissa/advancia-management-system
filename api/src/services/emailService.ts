@@ -16,15 +16,15 @@ class EmailService {
       host: config.email.host,
       port: config.email.port,
       secure: config.email.secure,
-      auth: {
+      ...(config.email.auth.user && config.email.auth.pass ? { auth: {
         user: config.email.auth.user,
         pass: config.email.auth.pass
-      }
+      } } : {})
     });
   }
 
   isConfigured(): boolean {
-    return Boolean(config.email.auth.user && config.email.auth.pass);
+    return Boolean(config.email.host);
   }
 
   async sendEmail(notification: EmailNotification): Promise<EmailDeliveryResult> {

@@ -8,8 +8,8 @@ import { z } from 'zod';
 const router = Router();
 
 const loginSchema = z.object({
-  email: z.string().trim().email('Must be a valid email address').max(254),
-  password: z.string().min(1, 'Password is required').max(128)
+  email: z.string().trim().email('Saisissez une adresse e-mail valide').max(254),
+  password: z.string().min(1, 'Le mot de passe est obligatoire').max(128)
 });
 
 router.post('/login', authLimiter, validate(loginSchema), login);

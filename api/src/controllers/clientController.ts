@@ -7,6 +7,7 @@ import { ClientStatus, UserRole } from '../types';
 import { sendError } from '../utils/errors';
 import { License } from '../models/License';
 import { Contract } from '../models/Contract';
+import { daysUntil, getExpiryBucket } from '../services/renewalDomain';
 
 const assignedUserFields = 'firstName lastName email role';
 
@@ -128,10 +129,20 @@ export const getClient = async (req: AuthRequest, res: Response): Promise<void> 
     }
     const [decorated] = await withComputedStatus([client], req.user!.role);
     const itemBase = { client: client._id, archivedAt: null };
-    const [licenses, contracts] = await Promise.all([
-      req.user!.role === UserRole.CONSULTANT ? Promise.resolve([]) : License.find({ ...itemBase, ...(req.user!.role === UserRole.AGENT ? { assignedBy: req.user!.id } : {}) }).sort({ expiryDate: 1 }),
-      req.user!.role === UserRole.AGENT ? Promise.resolve([]) : Contract.find({ ...itemBase, ...(req.user!.role === UserRole.CONSULTANT ? { managedBy: req.user!.id } : {}) }).sort({ expiryDate: 1 })
+    const [licenseDocuments, contractDocuments] = await Promise.all([
+      req.user!.role === UserRole.CONSULTANT ? Promise.resolve([]) : License.find({ ...itemBase, ...(req.user!.role === UserRole.AGENT ? { assignedBy: req.user!.id } : {}) }).populate('assignedBy', '-password').populate('offer').sort({ expiryDate: 1 }),
+      req.user!.role === UserRole.AGENT ? Promise.resolve([]) : Contract.find({ ...itemBase, ...(req.user!.role === UserRole.CONSULTANT ? { managedBy: req.user!.id } : {}) }).populate('managedBy', '-password').populate('contractType').sort({ expiryDate: 1 })
     ]);
+    const licenses = licenseDocuments.map((document: any) => {
+      const raw = document.toObject();
+      const days = daysUntil(document.expiryDate);
+      return { ...raw, id: String(raw._id), owner: raw.assignedBy, urgency: getExpiryBucket(document.expiryDate), daysUntilExpiry: days };
+    });
+    const contracts = contractDocuments.map((document: any) => {
+      const raw = document.toObject();
+      const days = daysUntil(document.expiryDate);
+      return { ...raw, id: String(raw._id), owner: raw.managedBy, urgency: getExpiryBucket(document.expiryDate), daysUntilExpiry: days };
+    });
     res.json({ data: { ...decorated, licenses, contracts } });
   } catch (error) {
     console.error('Get client error:', error);

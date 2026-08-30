@@ -20,6 +20,8 @@ export const licenseApi = {
     (await api.post<{ data: License }>(`/licenses/${id}/renew`, { expiryDate, value, note })).data.data,
   decline: async (id: string, reason: string, note?: string) =>
     (await api.post<{ data: License }>(`/licenses/${id}/decline`, { reason, note })).data.data,
+  archive: async (id: string) =>
+    (await api.delete<{ data: { id: string; archived: boolean } }>(`/licenses/${id}`)).data.data,
   activity: async (id: string) =>
     (await api.get<{ data: RenewalActivity[] }>(`/licenses/${id}/activity`)).data.data,
   clients: async () => {

@@ -2,12 +2,14 @@ import { connectDB } from './config/database';
 import { config } from './config';
 import { expiryCheckerJob } from './jobs/expiryChecker';
 import { app } from './app';
+import { ensureDefaultCatalogs } from './services/catalogBootstrap';
 
 // Start server
 const startServer = async () => {
   try {
     // Connect to database
     await connectDB();
+    await ensureDefaultCatalogs();
 
     // Start cron job
     expiryCheckerJob.start();

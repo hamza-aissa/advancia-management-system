@@ -22,6 +22,7 @@ export const contractsApi = {
   async renew(id: string, expiryDate: string, value?: number, note?: string) { return (await api.post<Envelope<Contract>>(`/contracts/${id}/renew`, { expiryDate, value, note })).data.data },
   async decline(id: string, reason: string, note?: string) { return (await api.post<Envelope<Contract>>(`/contracts/${id}/decline`, { reason, note })).data.data },
   async reassign(id: string, owner: string) { return (await api.patch<Envelope<Contract>>(`/contracts/${id}/assignee`, { owner })).data.data },
+  async archive(id: string) { return (await api.delete<Envelope<{ id: string; archived: boolean }>>(`/contracts/${id}`)).data.data },
   async activity(id: string) { return (await api.get<Envelope<RenewalActivity[]>>(`/contracts/${id}/activity`)).data.data },
   async clients() {
     const response = await api.get<Envelope<{ clients: ClientRef[] }>>('/clients')
