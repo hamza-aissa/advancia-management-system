@@ -16,7 +16,7 @@ const startServer = async () => {
     app.listen(config.port, () => {
       console.log(`🚀 Server running on port ${config.port}`);
       console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🔔 Expiry checker cron: ${config.cronSchedule}`);
+      console.log(`🔔 Rappels : ${config.cronSchedule} (${config.cronTimezone})`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);

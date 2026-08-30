@@ -42,3 +42,39 @@ export interface ActionFilters {
   overdue?: boolean
   search?: string
 }
+
+export interface ReminderReport {
+  trigger: 'scheduled' | 'manual'
+  startedAt: string
+  finishedAt: string
+  itemsChecked: number
+  sent: number
+  simulated: number
+  failed: number
+  skipped: number
+}
+
+export interface ReminderStatus {
+  schedule: string
+  timezone: string
+  scheduled: boolean
+  running: boolean
+  lastRunAt: string | null
+  lastSuccessAt: string | null
+  lastFailureAt: string | null
+  lastError: string | null
+  nextRunAt: string | null
+  lastReport: ReminderReport | null
+}
+
+export interface NotificationEntry {
+  _id: string
+  itemKind: ActionKind
+  threshold: 15 | 10 | 6
+  recipient: string
+  renewalCycle: string
+  deliveryStatus: 'pending' | 'sent' | 'simulated' | 'failed'
+  attemptedAt?: string
+  sentAt?: string
+  error?: string
+}

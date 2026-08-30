@@ -53,22 +53,22 @@ The project consists of two main components:
 - **Responsibility**: High-level observer
 - **Permissions**:
   - Receives critical expiry notifications only
-  - Email addresses are hardcoded in configuration
+  - Email addresses are supplied through `EXECUTIVE_EMAILS`
 - **Access**: NO direct system access (email notifications only)
 
 ## 🔔 Notification System
 
 ### Expiry Check Schedule
 
-A daily cron job (default: 9:00 AM) checks all active licenses and contracts.
+A daily cron job (default: 09:00 in `Africa/Tunis`) checks all active licenses and contracts. The schedule and IANA timezone are validated at startup. Runs cannot overlap, and a late run catches the current escalation level instead of requiring an exact calendar day.
 
 ### Notification Rules
 
 | Days Before Expiry | Recipients | Frequency | Description |
 |-------------------|-----------|-----------|-------------|
-| **15 days** | Consultant (contracts) or Agent (licenses) | Daily | Internal reminder to responsible party |
-| **10 days** | Consultant/Agent + Admin | Daily | Escalated warning |
-| **6 days** | Consultant/Agent + Admin + Executives | Daily | Critical stage notification |
+| **15 days** | Agent (licenses) or Consultant (contracts) | Once per renewal cycle | Internal reminder to responsible party |
+| **10 days** | Responsible employee + Admin | Once per renewal cycle | Escalated warning |
+| **6 days** | Responsible employee + Admin + Executives | Once per renewal cycle | Critical stage notification |
 
 ### Important Notes
 
@@ -77,6 +77,8 @@ A daily cron job (default: 9:00 AM) checks all active licenses and contracts.
 - Consultants (for contracts)
 - Admins (escalated notifications)
 - Executives (critical notifications)
+
+The unique notification history prevents duplicates. With no SMTP credentials, reminders are explicitly stored as `simulated`, never as sent. Administrators can inspect `GET /api/notifications/status`, run a check with `POST /api/notifications/run`, and review `GET /api/notifications/history`.
 
 ## 🚀 Quick Start
 
@@ -249,7 +251,7 @@ cd api
 npm run test:expiry
 ```
 
-This will check all licenses and contracts and log which notifications would be sent.
+This checks all licenses and contracts. Without SMTP credentials it creates clearly labelled simulated notification-history entries.
 
 ## 🔐 Security
 

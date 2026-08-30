@@ -29,13 +29,15 @@ All requirements from the problem statement have been fully implemented:
 ✅ **Executive Role**
 - No direct system access
 - Receives critical notifications (6 days before expiry)
-- Email addresses hardcoded in configuration
+- Email addresses configured through `EXECUTIVE_EMAILS`
 
 ### 2. Automated Notification System
 
 ✅ **Daily Cron Job**
 - Implemented in `/api/src/jobs/expiryChecker.ts`
-- Runs daily (configurable schedule)
+- Runs daily (validated configurable schedule and timezone; defaults to `Africa/Tunis`)
+- Prevents overlapping executions and exposes last/next-run status to administrators
+- Catches up the reached escalation level after downtime
 - Checks all active licenses and contracts
 - Calculates days until expiration
 
@@ -43,15 +45,16 @@ All requirements from the problem statement have been fully implemented:
 
 | Days Before Expiry | Recipients | Frequency | Implementation |
 |-------------------|-----------|-----------|----------------|
-| 15 days | Agent/Consultant | Daily | ✅ Implemented |
-| 10 days | Agent/Consultant + Admin | Daily | ✅ Implemented |
-| 6 days | Agent/Consultant + Admin + Executives | Daily | ✅ Implemented |
+| 15 days | Agent for licenses / Consultant for contracts | Once per renewal cycle | ✅ Implemented |
+| 10 days | Responsible employee + Admin | Once per renewal cycle | ✅ Implemented |
+| 6 days | Responsible employee + Admin + Executives | Once per renewal cycle | ✅ Implemented |
 
 ✅ **Email Notifications**
 - Implemented with Nodemailer
 - HTML & text templates
 - Configurable SMTP settings
-- Falls back to console logging for development
+- Records an honest `simulated` delivery state when SMTP is absent
+- Uses French subjects, text and HTML content
 
 ### 3. System Architecture
 

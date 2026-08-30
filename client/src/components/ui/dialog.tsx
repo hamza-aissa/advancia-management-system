@@ -40,11 +40,11 @@ export function Dialog({ open, onOpenChange, title, description, children }: Dia
 
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) onOpenChange(false) }}>
-      <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined} className="max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-xl border bg-card shadow-2xl">
-        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b bg-card px-6 py-5">
-          <div><h2 id={titleId} className="text-lg font-semibold">{title}</h2>{description && <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">{description}</p>}</div>
-          <Button type="button" variant="ghost" size="icon" aria-label="Close dialog" onClick={() => onOpenChange(false)}><X /></Button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) onOpenChange(false) }}>
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined} className="max-h-[calc(100vh-2rem)] w-full max-w-xl overflow-y-auto rounded-lg border bg-card shadow-sm">
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b bg-card px-4 py-3">
+          <div><h2 id={titleId} className="text-base font-semibold">{title}</h2>{description && <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">{description}</p>}</div>
+          <Button type="button" variant="ghost" size="icon" aria-label="Fermer la fenêtre" onClick={() => onOpenChange(false)}><X /></Button>
         </div>
         {children}
       </div>

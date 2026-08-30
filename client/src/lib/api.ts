@@ -42,6 +42,6 @@ api.interceptors.response.use(
 
 export function getApiErrorMessage(error: unknown, fallback = 'Something went wrong. Please try again.') {
   if (!axios.isAxiosError<ApiErrorPayload>(error)) return fallback
-  if (!error.response) return 'Unable to reach the server. Check your connection and try again.'
+  if (!error.response) return 'Impossible de joindre le serveur. Vérifiez votre connexion puis réessayez.'
   return error.response.data?.error?.message || fallback
 }

@@ -9,7 +9,7 @@ export interface NotificationLogDocument extends Document {
   sentAt?: Date;
   attemptedAt?: Date;
   error?: string;
-  deliveryStatus: 'pending' | 'sent' | 'failed';
+  deliveryStatus: 'pending' | 'sent' | 'simulated' | 'failed';
 }
 
 const notificationLogSchema = new Schema<NotificationLogDocument>({
@@ -21,7 +21,7 @@ const notificationLogSchema = new Schema<NotificationLogDocument>({
   sentAt: Date,
   attemptedAt: Date,
   error: String,
-  deliveryStatus: { type: String, enum: ['pending', 'sent', 'failed'], default: 'pending' }
+  deliveryStatus: { type: String, enum: ['pending', 'sent', 'simulated', 'failed'], default: 'pending' }
 }, { timestamps: true });
 
 notificationLogSchema.index({ itemKind: 1, itemId: 1, renewalCycle: 1, threshold: 1, recipient: 1 }, { unique: true });

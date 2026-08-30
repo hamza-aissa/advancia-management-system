@@ -58,8 +58,8 @@ export interface RenewalActivity {
 
 export const entityId = (value: { id?: string; _id?: string }) => value.id || value._id || ''
 export const personName = (person: PersonRef | string | undefined) => {
-  if (!person) return 'Unassigned'
+  if (!person) return 'Non attribué'
   if (typeof person === 'string') return person
-  return `${person.firstName} ${person.lastName}`.trim() || person.email || 'Unassigned'
+  return `${person.firstName} ${person.lastName}`.trim() || person.email || 'Non attribué'
 }
 export const clientName = (client: ClientRef | string) => typeof client === 'string' ? client : client.name

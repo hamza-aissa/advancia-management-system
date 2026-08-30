@@ -10,7 +10,22 @@ import { Contract } from '../models/Contract';
 
 const assignedUserFields = 'firstName lastName email role';
 
-const withComputedStatus = async (clients: ClientDocument[]): Promise<Record<string, unknown>[]> => {
+const visibleAssignments = (role: UserRole) => role === UserRole.ADMIN
+  ? ['assignedAgent', 'assignedConsultant']
+  : role === UserRole.AGENT ? ['assignedAgent'] : ['assignedConsultant'];
+
+const populateVisibleAssignments = async (client: ClientDocument, role: UserRole): Promise<void> => {
+  await client.populate(visibleAssignments(role).map((path) => ({ path, select: assignedUserFields })));
+};
+
+export const redactClientForRole = (client: Record<string, unknown>, role: UserRole): Record<string, unknown> => {
+  const result = { ...client };
+  if (role === UserRole.AGENT) delete result.assignedConsultant;
+  if (role === UserRole.CONSULTANT) delete result.assignedAgent;
+  return result;
+};
+
+const withComputedStatus = async (clients: ClientDocument[], role: UserRole): Promise<Record<string, unknown>[]> => {
   if (clients.length === 0) return [];
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() + 15);
@@ -18,16 +33,16 @@ const withComputedStatus = async (clients: ClientDocument[]): Promise<Record<str
   const open = { isActive: true, archivedAt: null, renewalStatus: { $nin: ['renewed', 'declined'] } };
   const riskWindow = { $or: [{ expiryDate: { $lte: cutoff } }, { nextFollowUpAt: { $lt: new Date() } }] };
   const [licenseClientIds, contractClientIds] = await Promise.all([
-    License.distinct('client', { client: { $in: clientIds }, ...open, ...riskWindow }),
-    Contract.distinct('client', { client: { $in: clientIds }, ...open, ...riskWindow })
+    role === UserRole.CONSULTANT ? Promise.resolve([]) : License.distinct('client', { client: { $in: clientIds }, ...open, ...riskWindow }),
+    role === UserRole.AGENT ? Promise.resolve([]) : Contract.distinct('client', { client: { $in: clientIds }, ...open, ...riskWindow })
   ]);
   const atRisk = new Set([...licenseClientIds, ...contractClientIds].map(String));
-  return clients.map((client) => ({
+  return clients.map((client) => redactClientForRole({
     ...client.toJSON(),
     status: client.archivedAt
       ? ClientStatus.INACTIVE
       : atRisk.has(String(client._id)) ? ClientStatus.AT_RISK : ClientStatus.ACTIVE
-  }));
+  }, role));
 };
 
 export const buildClientScope = (user: NonNullable<AuthRequest['user']>): FilterQuery<ClientDocument> => {
@@ -66,11 +81,8 @@ export const createClient = async (req: AuthRequest, res: Response): Promise<voi
     }
 
     const client = await Client.create(input);
-    await client.populate([
-      { path: 'assignedAgent', select: assignedUserFields },
-      { path: 'assignedConsultant', select: assignedUserFields }
-    ]);
-    const [data] = await withComputedStatus([client]);
+    await populateVisibleAssignments(client, req.user!.role);
+    const [data] = await withComputedStatus([client], req.user!.role);
     res.status(201).json({ data });
   } catch (error: any) {
     console.error('Create client error:', error);
@@ -95,11 +107,10 @@ export const getClients = async (req: AuthRequest, res: Response): Promise<void>
       ];
     }
 
-    const clients = await Client.find(filter)
-      .populate('assignedAgent', assignedUserFields)
-      .populate('assignedConsultant', assignedUserFields)
-      .sort({ status: 1, name: 1 });
-    const decoratedClients = await withComputedStatus(clients);
+    let query = Client.find(filter);
+    for (const path of visibleAssignments(req.user!.role)) query = query.populate(path, assignedUserFields);
+    const clients = await query.sort({ status: 1, name: 1 });
+    const decoratedClients = await withComputedStatus(clients, req.user!.role);
     const data = req.query.status
       ? decoratedClients.filter((client) => client.status === req.query.status)
       : decoratedClients;
@@ -112,20 +123,20 @@ export const getClients = async (req: AuthRequest, res: Response): Promise<void>
 
 export const getClient = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const client = await Client.findOne({
+    let query = Client.findOne({
       _id: req.params.id,
       archivedAt: null,
       ...buildClientScope(req.user!)
-    })
-      .populate('assignedAgent', assignedUserFields)
-      .populate('assignedConsultant', assignedUserFields);
+    });
+    for (const path of visibleAssignments(req.user!.role)) query = query.populate(path, assignedUserFields);
+    const client = await query;
 
     if (!client) {
       // Returning 404 avoids disclosing that another employee owns the record.
       sendError(res, 404, 'CLIENT_NOT_FOUND', 'Client not found');
       return;
     }
-    const [decorated] = await withComputedStatus([client]);
+    const [decorated] = await withComputedStatus([client], req.user!.role);
     const itemBase = { client: client._id, archivedAt: null };
     const [licenses, contracts] = await Promise.all([
       req.user!.role === UserRole.CONSULTANT ? Promise.resolve([]) : License.find({ ...itemBase, ...(req.user!.role === UserRole.AGENT ? { assignedBy: req.user!.id } : {}) }).sort({ expiryDate: 1 }),
@@ -163,11 +174,8 @@ export const updateClient = async (req: AuthRequest, res: Response): Promise<voi
 
     Object.assign(client, req.body);
     await client.save();
-    await client.populate([
-      { path: 'assignedAgent', select: assignedUserFields },
-      { path: 'assignedConsultant', select: assignedUserFields }
-    ]);
-    const [data] = await withComputedStatus([client]);
+    await populateVisibleAssignments(client, req.user!.role);
+    const [data] = await withComputedStatus([client], req.user!.role);
     res.json({ data });
   } catch (error: any) {
     console.error('Update client error:', error);

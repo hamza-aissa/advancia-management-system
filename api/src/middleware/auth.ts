@@ -25,7 +25,7 @@ export const authenticate = async (
       : undefined;
 
     if (!token) {
-      sendError(res, 401, 'AUTHENTICATION_REQUIRED', 'Authentication required');
+      sendError(res, 401, 'AUTHENTICATION_REQUIRED', 'Authentification requise');
       return;
     }
 
@@ -37,26 +37,26 @@ export const authenticate = async (
 
     const user = await User.findById(decoded.id).select('email role');
     if (!user) {
-      sendError(res, 401, 'INVALID_TOKEN', 'Invalid or expired token');
+      sendError(res, 401, 'INVALID_TOKEN', 'Session invalide ou expirée');
       return;
     }
 
     req.user = { id: String(user._id), email: user.email, role: user.role };
     next();
   } catch (error) {
-    sendError(res, 401, 'INVALID_TOKEN', 'Invalid or expired token');
+    sendError(res, 401, 'INVALID_TOKEN', 'Session invalide ou expirée');
   }
 };
 
 export const authorize = (...roles: UserRole[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
     if (!req.user) {
-      sendError(res, 401, 'AUTHENTICATION_REQUIRED', 'Authentication required');
+      sendError(res, 401, 'AUTHENTICATION_REQUIRED', 'Authentification requise');
       return;
     }
 
     if (!roles.includes(req.user.role)) {
-      sendError(res, 403, 'FORBIDDEN', 'Insufficient permissions');
+      sendError(res, 403, 'FORBIDDEN', 'Accès interdit pour votre département');
       return;
     }
 

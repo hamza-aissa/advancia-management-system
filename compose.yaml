@@ -34,6 +34,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-local-demo-only-replace-with-a-long-random-secret-before-hosting}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-7d}
       CRON_SCHEDULE: ${CRON_SCHEDULE:-0 9 * * *}
+      CRON_TIMEZONE: ${CRON_TIMEZONE:-Africa/Tunis}
       EMAIL_HOST: ${EMAIL_HOST:-}
       EMAIL_PORT: ${EMAIL_PORT:-587}
       EMAIL_SECURE: ${EMAIL_SECURE:-false}

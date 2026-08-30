@@ -23,10 +23,11 @@ export const config = {
   // Executive emails (hardcoded as per requirements)
   executiveEmails: process.env.EXECUTIVE_EMAILS 
     ? process.env.EXECUTIVE_EMAILS.split(',').map(e => e.trim())
-    : ['executive1@advancia.com', 'executive2@advancia.com'],
+    : [],
   
   // Cron schedule (daily at 9 AM)
   cronSchedule: process.env.CRON_SCHEDULE || '0 9 * * *',
+  cronTimezone: process.env.CRON_TIMEZONE || 'Africa/Tunis',
   
   // Notification thresholds (days before expiry)
   notificationThresholds: [15, 10, 6]
